@@ -72,4 +72,32 @@ return [
             'hidden_until_connected' => 'The newsletter does not appear on the site until the connection works.',
         ],
     ],
+
+    'block' => [
+        'label' => 'Newsletter sign-up',
+        'button_default' => 'Subscribe',
+        'fields' => [
+            'intro' => 'Introduction',
+            'button_label' => 'Button text',
+            'show_name' => 'Ask for the name',
+        ],
+        'helpers' => [
+            'intro' => 'A sentence about the newsletter, above the form. Optional.',
+            'show_name' => 'Adds an optional field for the name.',
+        ],
+    ],
+
+    'subscribe' => [
+        'page_title' => 'Newsletter',
+        'page_description' => 'Subscribe to the association newsletter and get the news by email.',
+        'check_your_email' => 'Check your email: we have sent you a link to confirm the subscription.',
+        'fields' => [
+            'email' => 'email address',
+            'name' => 'name',
+        ],
+        'errors' => [
+            'consent' => 'Tick the box to agree to receive the newsletter.',
+            'too_many_attempts' => 'Too many attempts. Wait a few minutes and try again.',
+        ],
+    ],
 ];

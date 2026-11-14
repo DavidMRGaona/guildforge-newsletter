@@ -72,4 +72,32 @@ return [
             'hidden_until_connected' => 'El boletín no aparece en la web hasta que la conexión funcione.',
         ],
     ],
+
+    'block' => [
+        'label' => 'Suscripción al boletín',
+        'button_default' => 'Suscribirme',
+        'fields' => [
+            'intro' => 'Texto de presentación',
+            'button_label' => 'Texto del botón',
+            'show_name' => 'Pedir el nombre',
+        ],
+        'helpers' => [
+            'intro' => 'Una frase sobre el boletín, encima del formulario. Opcional.',
+            'show_name' => 'Añade un campo opcional para el nombre.',
+        ],
+    ],
+
+    'subscribe' => [
+        'page_title' => 'Boletín',
+        'page_description' => 'Suscríbete al boletín de la asociación y recibe las novedades por correo.',
+        'check_your_email' => 'Revisa tu correo: te hemos enviado un enlace para confirmar la suscripción.',
+        'fields' => [
+            'email' => 'correo electrónico',
+            'name' => 'nombre',
+        ],
+        'errors' => [
+            'consent' => 'Marca la casilla para aceptar recibir el boletín.',
+            'too_many_attempts' => 'Has hecho demasiados intentos. Espera unos minutos y vuelve a probar.',
+        ],
+    ],
 ];

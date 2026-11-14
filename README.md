@@ -2,7 +2,7 @@
 
 Suscripción al boletín de la asociación desde la web, con una lista de Mailchimp.
 
-> Estado: conexión con Mailchimp y ajustes. El formulario de suscripción, el bloque del pie, el perfil y la casilla del registro llegan en las siguientes issues del hito.
+> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`). La salud del proveedor, el perfil y la casilla del registro llegan en las siguientes issues del hito.
 
 La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp con doble confirmación, y las campañas se siguen preparando en Mailchimp.
 
@@ -41,10 +41,32 @@ Si Mailchimp rechaza el email (`400`, por ejemplo uno borrado para siempre), el 
 
 Los ajustes se leen y se descifran una vez por petición o trabajo en cola (repositorio y disponibilidad con binding `scoped`); guardar descarta la copia.
 
+## Formulario de suscripción
+
+El mismo formulario aparece en tres sitios, y en ninguno mientras el boletín no esté disponible:
+
+- **Bloque `newsletter.subscribe`** para el pie (*Sitio web → Pie de página*) y para las ventanas emergentes de anuncios. Sus ajustes son planos: texto de presentación, texto del botón y si se pide el nombre. Con el proveedor caído el bloque no se pinta.
+- **Página `/newsletter`** (`newsletter.show`), que responde 404 si el boletín no está disponible. Las ventanas emergentes nunca salen en ella. El enlace del menú se pone a mano (*Menú público*, enlace a `/newsletter`).
+
+Pide email, nombre opcional y una casilla de consentimiento obligatoria con el texto y el enlace de los ajustes. Lleva un campo trampa (`website`) que la gente no ve: quien lo rellena recibe la misma respuesta y no se envía nada. Con sesión, el email y el nombre de la cuenta ya vienen puestos. En el pie toma los colores oscuros del pie; en una ventana o en la página, los de la web. Cada error va bajo su campo y lo nombra (`aria-describedby`), el foco va al primero, y el resultado se anuncia y recibe el foco.
+
+`POST /newsletter` (`newsletter.store`) acepta JSON (el formulario lo envía así, sin recargar la página) y formularios normales (vuelve atrás con el mensaje). Tiene un límite por IP (5 por minuto y 20 por hora) y `email.verified-if-required`: una cuenta que debe verificar su email lo hace antes. La respuesta es siempre «Revisa tu correo…», sin decir si el email ya estaba en la lista.
+
+### Alta en cola
+
+El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
+
+- Implementa `ShouldBeEncrypted` y solo lleva el email y el nombre: el proveedor, con su clave, se resuelve en `handle()`, así que la clave nunca se serializa.
+- Hasta 4 intentos, con esperas de 30 s, 2 min y 10 min. Una clave rechazada, una lista que ya no existe o unos ajustes vacíos lo hacen fallar al momento, porque reintentar no lo arregla.
+- Al fallar del todo registra solo el hash del suscriptor y el tipo de fallo, y borra su copia de `failed_jobs` (el worker la escribe después de llamar a `failed()`, así que la borra un listener de `JobFailed` que corre detrás del suyo).
+- Durante una impersonación no se encola nada (`SubscriptionRequesterInterface` comprueba `ImpersonationContextInterface::isActive()`), aunque la respuesta sea la misma.
+
+`SubscribeFailureCounterInterface` cuenta las altas fallidas seguidas, en la caché compartida por los workers: suma uno cada trabajo que falla del todo y cada email que Mailchimp rechaza (`Rejected`), y vuelve a cero con cualquier respuesta normal (confirmación enviada, ya suscrito, rebotado). Lo usará la comprobación de salud del proveedor; por ahora solo cuenta.
+
 ## Privacidad y seguridad
 
 - Los emails no se guardan en la web ni aparecen en los logs: en los errores solo va el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp (nunca su detalle, que suele repetir el email).
-- El email, el nombre y la clave llevan `#[\SensitiveParameter]` en el proveedor, en `SubscriberHash` y en `MailchimpApiKey`, así que no salen en las trazas aunque `zend.exception_ignore_args` esté desactivado.
+- El email, el nombre y la clave llevan `#[\SensitiveParameter]` en el proveedor, en `SubscriberHash`, en `MailchimpApiKey`, en el trabajo de alta y en quien lo encola, así que no salen en las trazas aunque `zend.exception_ignore_args` esté desactivado.
 - Durante una impersonación no se llama a Mailchimp, tampoco desde **Probar conexión** ni al guardar: el proveedor falla con `impersonation`.
 
 ## Requisitos
