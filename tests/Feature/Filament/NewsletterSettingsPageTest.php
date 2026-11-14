@@ -305,12 +305,45 @@ final class NewsletterSettingsPageTest extends ModuleTestCase
         Livewire::test(NewsletterSettingsPage::class)
             ->fillForm(['api_key' => self::KEY])
             ->call('testConnection')
-            ->assertNotified()
-            ->fillForm(['consent_text' => 'Acepto.', 'list_id' => null])
-            ->call('save');
+            ->assertNotified();
 
         Http::assertNothingSent();
+    }
+
+    public function test_saving_during_an_impersonation_never_calls_mailchimp_and_records_no_good_check(): void
+    {
+        Http::fake();
+        $this->storeConfigured();
+        $this->actingAsPanelAdmin();
+        $this->mock(ImpersonationContextInterface::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('isActive')->andReturnTrue();
+            $mock->shouldReceive('mode')->andReturn(ImpersonationMode::Simulate);
+        });
+
+        // The saved list is a valid choice, so the form passes and save() reaches the check
+        Livewire::test(NewsletterSettingsPage::class)
+            ->fillForm(['api_key' => self::OTHER_KEY, 'list_id' => self::LIST, 'consent_text' => 'Acepto.'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified();
+
+        Http::assertNothingSent();
+        $settings = $this->settings();
+        $this->assertSame('Acepto.', $settings->consentText);
+        $this->assertSame(ConnectionFailure::Impersonation, $settings->lastCheck?->failure);
         $this->assertFalse($this->app->make(NewsletterAvailabilityInterface::class)->isAvailable());
+    }
+
+    public function test_the_check_is_dated_with_the_application_clock(): void
+    {
+        $this->fakeLists();
+        $this->storeConfigured();
+        $this->actingAsPanelAdmin();
+        $this->travelTo(new DateTimeImmutable('2026-11-20 08:15:00 UTC'));
+
+        Livewire::test(NewsletterSettingsPage::class)->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame('2026-11-20T08:15:00+00:00', $this->settings()->lastCheck?->checkedAt->setTimezone(new \DateTimeZone('UTC'))->format(DATE_ATOM));
     }
 
     public function test_the_last_check_is_shown(): void

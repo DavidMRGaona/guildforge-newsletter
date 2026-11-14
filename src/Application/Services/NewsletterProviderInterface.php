@@ -13,7 +13,8 @@ use Modules\Newsletter\Domain\Exceptions\NewsletterProviderException;
  * The service that keeps the newsletter list (Mailchimp). The site never stores the addresses:
  * every question goes to the provider.
  *
- * Nothing is sent while an administrator is impersonating someone: every method fails with
+ * Implementations mark the address and the name #[\SensitiveParameter], so they never show in a
+ * stack trace. Nothing is sent while an administrator is impersonating someone: every method fails with
  * ConnectionFailure::Impersonation instead.
  */
 interface NewsletterProviderInterface

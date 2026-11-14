@@ -27,18 +27,26 @@ use Modules\Newsletter\Domain\ValueObjects\MailchimpListId;
  * the one every module uses. The API key is encrypted with the application key.
  *
  * Reads go to the stored row, not to the copy the core puts in the configuration at boot: a queue
- * worker that started before a change still sees the new values.
+ * worker that started before a change still sees the new values. Bound "scoped", so the row is
+ * read and the key decrypted once per request or queued job; save() drops that copy.
  */
-final readonly class ModuleNewsletterSettingsRepository implements NewsletterSettingsRepositoryInterface
+final class ModuleNewsletterSettingsRepository implements NewsletterSettingsRepositoryInterface
 {
     private const string MODULE = 'newsletter';
 
+    private ?NewsletterSettings $read = null;
+
     public function __construct(
-        private ModuleSettingsStoreInterface $store,
-        private ModuleManagerServiceInterface $modules,
+        private readonly ModuleSettingsStoreInterface $store,
+        private readonly ModuleManagerServiceInterface $modules,
     ) {}
 
     public function get(): NewsletterSettings
+    {
+        return $this->read ??= $this->load();
+    }
+
+    private function load(): NewsletterSettings
     {
         $raw = $this->store->stored(self::MODULE);
 
@@ -55,6 +63,7 @@ final readonly class ModuleNewsletterSettingsRepository implements NewsletterSet
 
     public function save(NewsletterSettings $settings): void
     {
+        $this->read = null;
         $lastCheck = $settings->lastCheck;
 
         // Through the module manager, so the configuration of this request sees the new values too

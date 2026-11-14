@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Newsletter\Domain\ValueObjects;
 
 use InvalidArgumentException;
+use SensitiveParameter;
 
 /**
  * A Mailchimp Marketing API key: a secret, a dash and the data centre of the account
@@ -17,17 +18,23 @@ final readonly class MailchimpApiKey
 
     private const string SERVER_PATTERN = '/^[a-z]{2}[0-9]{1,3}$/';
 
-    public function __construct(
-        private string $secret,
-        private string $server,
-    ) {
+    private string $secret;
+
+    private string $server;
+
+    // Not promoted: #[SensitiveParameter] only applies to parameters
+    public function __construct(#[SensitiveParameter] string $secret, string $server)
+    {
         if (preg_match(self::SECRET_PATTERN, $secret) !== 1 || preg_match(self::SERVER_PATTERN, $server) !== 1) {
             // Never the value: exception messages end up in logs
             throw new InvalidArgumentException('Not a Mailchimp API key');
         }
+
+        $this->secret = $secret;
+        $this->server = $server;
     }
 
-    public static function fromString(string $value): self
+    public static function fromString(#[SensitiveParameter] string $value): self
     {
         $value = trim($value);
         $dash = strrpos($value, '-');
@@ -39,7 +46,7 @@ final readonly class MailchimpApiKey
         return new self(substr($value, 0, $dash), substr($value, $dash + 1));
     }
 
-    public static function isWellFormed(string $value): bool
+    public static function isWellFormed(#[SensitiveParameter] string $value): bool
     {
         try {
             self::fromString($value);

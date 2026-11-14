@@ -207,7 +207,84 @@ final class MailchimpProviderTest extends TestCase
 
         Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), self::BASE.'/')
             && $request->header('Authorization') === ['Basic '.base64_encode('guildforge:'.self::KEY)]);
-        $this->assertLessThanOrEqual(10, MailchimpProvider::TIMEOUT_SECONDS);
+    }
+
+    public function test_every_request_waits_only_a_few_seconds(): void
+    {
+        $sent = [];
+        Http::fake(function (Request $request, array $options) use (&$sent) {
+            $sent[] = $options;
+
+            return Http::response(['status' => 'subscribed'], 200);
+        });
+
+        $this->provider()->status(self::EMAIL);
+        $this->provider()->checkConnection();
+
+        $this->assertCount(2, $sent);
+
+        foreach ($sent as $options) {
+            $this->assertSame(MailchimpProvider::TIMEOUT_SECONDS, $options['timeout']);
+            $this->assertSame(MailchimpProvider::CONNECT_TIMEOUT_SECONDS, $options['connect_timeout']);
+        }
+
+        $this->assertLessThanOrEqual(5, MailchimpProvider::TIMEOUT_SECONDS);
+        $this->assertLessThanOrEqual(3, MailchimpProvider::CONNECT_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * Production keeps zend.exception_ignore_args off, so stack traces print up to 15 characters
+     * of every argument: the address and the key must never be one of them.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function failingOperations(): iterable
+    {
+        yield 'subscribe' => ['subscribe'];
+        yield 'status' => ['status'];
+        yield 'unsubscribe' => ['unsubscribe'];
+    }
+
+    #[DataProvider('failingOperations')]
+    public function test_stack_traces_never_show_the_address(string $operation): void
+    {
+        $previous = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            foreach ([Http::response(['status' => 500], 500), Http::failedConnection()] as $answer) {
+                Http::fake([$this->memberUrl() => $answer]);
+
+                try {
+                    $provider = $this->provider();
+                    $operation === 'subscribe'
+                        ? $provider->subscribe(self::EMAIL, 'Anabel Secreta')
+                        : $provider->{$operation}(self::EMAIL);
+                    $this->fail('A NewsletterProviderException was expected');
+                } catch (NewsletterProviderException $e) {
+                    $trace = (string) $e;
+
+                    $this->assertStringContainsString('SensitiveParameterValue', $trace);
+                    $this->assertStringNotContainsStringIgnoringCase('Ana.Example', $trace);
+                    $this->assertStringNotContainsString('Anabel', $trace);
+                    $this->assertStringNotContainsString('fakemailchimp', $trace);
+                }
+            }
+        } finally {
+            ini_set('zend.exception_ignore_args', $previous === false ? '1' : $previous);
+        }
+    }
+
+    public function test_an_unexpected_error_during_the_check_is_a_failed_check_logged_by_class(): void
+    {
+        Http::fake(fn () => throw new \LogicException('details of '.self::EMAIL));
+
+        $result = $this->provider()->checkConnection();
+
+        $this->assertFalse($result->ok);
+        $this->assertSame(ConnectionFailure::RequestFailed, $result->failure);
+        $log = implode("\n", $this->logged);
+        $this->assertStringContainsString('LogicException', $log);
+        $this->assertStringNotContainsStringIgnoringCase(self::EMAIL, $log);
     }
 
     /**
@@ -218,7 +295,7 @@ final class MailchimpProviderTest extends TestCase
         yield 'subscribed' => [200, ['status' => 'subscribed'], SubscriptionStatus::Subscribed];
         yield 'pending' => [200, ['status' => 'pending'], SubscriptionStatus::Pending];
         yield 'unsubscribed' => [200, ['status' => 'unsubscribed'], SubscriptionStatus::Unsubscribed];
-        yield 'cleaned' => [200, ['status' => 'cleaned'], SubscriptionStatus::Unsubscribed];
+        yield 'cleaned (bounced, cannot join again)' => [200, ['status' => 'cleaned'], SubscriptionStatus::Blocked];
         yield 'archived' => [200, ['status' => 'archived'], SubscriptionStatus::Unsubscribed];
         yield 'transactional' => [200, ['status' => 'transactional'], SubscriptionStatus::NotFound];
         yield 'unknown' => [404, ['title' => 'Resource Not Found'], SubscriptionStatus::NotFound];

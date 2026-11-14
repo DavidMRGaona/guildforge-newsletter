@@ -35,11 +35,12 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
     {
         parent::register();
 
-        $this->app->bind(NewsletterSettingsRepositoryInterface::class, ModuleNewsletterSettingsRepository::class);
+        // Scoped: read and decrypted once per request or queued job (save() drops the copy)
+        $this->app->scoped(NewsletterSettingsRepositoryInterface::class, ModuleNewsletterSettingsRepository::class);
         $this->app->bind(NewsletterProviderFactoryInterface::class, NewsletterProviderFactory::class);
-        // Reads the saved settings on every call, so it never keeps an old key
+        // Asks the repository on every call, so a long-running worker never keeps an old key
         $this->app->bind(NewsletterProviderInterface::class, ConfiguredNewsletterProvider::class);
-        $this->app->bind(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
+        $this->app->scoped(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
     }
 
     public function getSettingsPage(): string

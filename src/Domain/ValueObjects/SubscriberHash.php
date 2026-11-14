@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Modules\Newsletter\Domain\ValueObjects;
 
+use SensitiveParameter;
+
 /**
  * How Mailchimp names a member: the MD5 of the lowercase address. It is also the only trace of an
  * address the module ever writes to a log.
@@ -14,7 +16,7 @@ final readonly class SubscriberHash
         private string $value,
     ) {}
 
-    public static function fromEmail(string $email): self
+    public static function fromEmail(#[SensitiveParameter] string $email): self
     {
         return new self(md5(mb_strtolower(trim($email))));
     }

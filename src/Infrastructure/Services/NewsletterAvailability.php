@@ -12,17 +12,25 @@ use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterfac
 use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
 use Throwable;
 
-final readonly class NewsletterAvailability implements NewsletterAvailabilityInterface
+/**
+ * Bound "scoped": the module lookup is made once per request or queued job, and the settings come
+ * from the (also scoped) repository, so asking several times on one page costs one read.
+ */
+final class NewsletterAvailability implements NewsletterAvailabilityInterface
 {
+    private ?bool $moduleEnabled = null;
+
     public function __construct(
-        private ModuleManagerServiceInterface $modules,
-        private NewsletterSettingsRepositoryInterface $settings,
+        private readonly ModuleManagerServiceInterface $modules,
+        private readonly NewsletterSettingsRepositoryInterface $settings,
     ) {}
 
     public function isAvailable(): bool
     {
         try {
-            if ($this->modules->find(new ModuleName('newsletter'))?->isEnabled() !== true) {
+            $this->moduleEnabled ??= $this->modules->find(new ModuleName('newsletter'))?->isEnabled() === true;
+
+            if (! $this->moduleEnabled) {
                 return false;
             }
 

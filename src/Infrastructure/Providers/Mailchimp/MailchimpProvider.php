@@ -20,6 +20,7 @@ use Modules\Newsletter\Domain\Exceptions\NewsletterProviderException;
 use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
 use Modules\Newsletter\Domain\ValueObjects\MailchimpListId;
 use Modules\Newsletter\Domain\ValueObjects\SubscriberHash;
+use SensitiveParameter;
 use Throwable;
 
 /**
@@ -31,7 +32,8 @@ use Throwable;
  * again), subscribed or pending → nothing, cleaned (bounced) → nothing, since the API cannot
  * bring it back.
  *
- * Neither addresses nor response bodies (Mailchimp repeats the address in its error details) are
+ * Addresses and names are #[SensitiveParameter], so stack traces (which print arguments where
+ * zend.exception_ignore_args is off) never show them. Neither addresses nor response bodies (Mailchimp repeats the address in its error details) are
  * ever logged: only the subscriber hash, the operation, the HTTP status and Mailchimp's title.
  */
 final readonly class MailchimpProvider implements NewsletterProviderInterface
@@ -55,7 +57,7 @@ final readonly class MailchimpProvider implements NewsletterProviderInterface
         private ?string $listId,
     ) {}
 
-    public function subscribe(string $email, ?string $name = null): SubscribeOutcome
+    public function subscribe(#[SensitiveParameter] string $email, #[SensitiveParameter] ?string $name = null): SubscribeOutcome
     {
         $listId = $this->listOrFail('subscribe');
         $hash = SubscriberHash::fromEmail($email);
@@ -108,7 +110,7 @@ final readonly class MailchimpProvider implements NewsletterProviderInterface
         return SubscribeOutcome::ConfirmationRequested;
     }
 
-    public function status(string $email): SubscriptionStatus
+    public function status(#[SensitiveParameter] string $email): SubscriptionStatus
     {
         $listId = $this->listOrFail('status');
 
@@ -116,11 +118,13 @@ final readonly class MailchimpProvider implements NewsletterProviderInterface
             null, 'transactional' => SubscriptionStatus::NotFound,
             'subscribed' => SubscriptionStatus::Subscribed,
             'pending' => SubscriptionStatus::Pending,
+            // Bounced: subscribe() cannot bring it back, so it must not be offered
+            'cleaned' => SubscriptionStatus::Blocked,
             default => SubscriptionStatus::Unsubscribed,
         };
     }
 
-    public function unsubscribe(string $email): void
+    public function unsubscribe(#[SensitiveParameter] string $email): void
     {
         $listId = $this->listOrFail('unsubscribe');
         $hash = SubscriberHash::fromEmail($email);
@@ -144,22 +148,33 @@ final readonly class MailchimpProvider implements NewsletterProviderInterface
     public function checkConnection(): ConnectionCheckResultDTO
     {
         try {
-            $this->assertNotImpersonating('check connection');
-
-            $response = $this->send('check connection', null, fn (PendingRequest $request): Response => $request->get('/lists', [
-                'fields' => 'lists.id,lists.name',
-                'count' => self::LIST_PAGE_SIZE,
-            ]));
-
-            // A 404 on the lists themselves is not a missing list: something else is wrong
-            if ($response->status() === 404) {
-                throw $this->failure(ConnectionFailure::RequestFailed, 'check connection', null, 404);
-            }
-
-            $this->assertSuccessful($response, 'check connection', null);
+            return $this->checkOrFail();
         } catch (NewsletterProviderException $e) {
             return new ConnectionCheckResultDTO($e->failure);
+        } catch (Throwable $e) {
+            // Never thrown on: a caller that records the check (saving, the daily check) would keep
+            // the previous "ok". The class only: messages may carry request details
+            Log::warning('Newsletter: the Mailchimp connection check failed unexpectedly', ['exception' => $e::class]);
+
+            return new ConnectionCheckResultDTO(ConnectionFailure::RequestFailed);
         }
+    }
+
+    private function checkOrFail(): ConnectionCheckResultDTO
+    {
+        $this->assertNotImpersonating('check connection');
+
+        $response = $this->send('check connection', null, fn (PendingRequest $request): Response => $request->get('/lists', [
+            'fields' => 'lists.id,lists.name',
+            'count' => self::LIST_PAGE_SIZE,
+        ]));
+
+        // A 404 on the lists themselves is not a missing list: something else is wrong
+        if ($response->status() === 404) {
+            throw $this->failure(ConnectionFailure::RequestFailed, 'check connection', null, 404);
+        }
+
+        $this->assertSuccessful($response, 'check connection', null);
 
         $lists = $this->lists($response);
 

@@ -35,11 +35,16 @@ Guardar comprueba siempre la conexión y guarda la fecha y el resultado de la ú
 | `subscribed` o `pending` | Nada |
 | `cleaned` (rebotado) | Nada: la API no permite reactivarlo; se registra solo el hash |
 
-Si Mailchimp rechaza el email (`400`, por ejemplo uno borrado para siempre), el resultado es `Rejected` y se registra el hash con el título del error. Los demás errores llegan como `NewsletterProviderException` con un `ConnectionFailure` (`unreachable`, `invalid_api_key`, `list_not_found`, `request_failed`, `not_configured`, `impersonation`). `checkConnection()` nunca lanza: devuelve el fallo en el resultado.
+Si Mailchimp rechaza el email (`400`, por ejemplo uno borrado para siempre), el resultado es `Rejected` y se registra el hash con el título del error. Los demás errores llegan como `NewsletterProviderException` con un `ConnectionFailure` (`unreachable`, `invalid_api_key`, `list_not_found`, `request_failed`, `not_configured`, `impersonation`). `checkConnection()` nunca lanza: devuelve el fallo en el resultado, y cualquier error inesperado cuenta como `request_failed` (en el log va solo su clase).
+
+`status()` devuelve `subscribed`, `pending`, `unsubscribed` (también `archived`, que se puede reactivar), `not_found` (también `transactional`) o `blocked` para un email rebotado (`cleaned`), al que no se le debe ofrecer suscribirse porque la API no lo deja volver.
+
+Los ajustes se leen y se descifran una vez por petición o trabajo en cola (repositorio y disponibilidad con binding `scoped`); guardar descarta la copia.
 
 ## Privacidad y seguridad
 
 - Los emails no se guardan en la web ni aparecen en los logs: en los errores solo va el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp (nunca su detalle, que suele repetir el email).
+- El email, el nombre y la clave llevan `#[\SensitiveParameter]` en el proveedor, en `SubscriberHash` y en `MailchimpApiKey`, así que no salen en las trazas aunque `zend.exception_ignore_args` esté desactivado.
 - Durante una impersonación no se llama a Mailchimp, tampoco desde **Probar conexión** ni al guardar: el proveedor falla con `impersonation`.
 
 ## Requisitos

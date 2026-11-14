@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Modules\Newsletter\Filament\Pages;
 
-use App\Application\Authorization\Services\AuthorizationServiceInterface;
 use App\Application\Services\TimezoneServiceInterface;
 use App\Filament\Clusters\SettingsCluster;
+use App\Filament\Concerns\ChecksPermissions;
 use Closure;
-use DateTimeImmutable;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -32,6 +31,7 @@ use Modules\Newsletter\Domain\Enums\ConnectionFailure;
 use Modules\Newsletter\Domain\Enums\NewsletterProviderName;
 use Modules\Newsletter\Domain\ValueObjects\ConnectionCheck;
 use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
+use SensitiveParameter;
 
 /**
  * «Sistema → Configuración → Boletín»: the Mailchimp connection and the consent text.
@@ -44,6 +44,7 @@ use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
  */
 final class NewsletterSettingsPage extends Page implements HasForms
 {
+    use ChecksPermissions;
     use InteractsWithForms;
 
     public const string PERMISSION = 'newsletter:newsletter.configure';
@@ -87,9 +88,7 @@ final class NewsletterSettingsPage extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        $user = auth()->user();
-
-        return $user !== null && app(AuthorizationServiceInterface::class)->can($user, self::PERMISSION);
+        return self::userCan(self::PERMISSION);
     }
 
     public function mount(): void
@@ -144,13 +143,13 @@ final class NewsletterSettingsPage extends Page implements HasForms
                             ->autocomplete('new-password')
                             ->required(fn (): bool => ! $this->hasStoredKey)
                             ->maxLength(100)
-                            ->rule(fn (): Closure => static function (string $attribute, mixed $value, Closure $fail): void {
+                            ->rule(fn (): Closure => static function (string $attribute, #[SensitiveParameter] mixed $value, Closure $fail): void {
                                 if (is_string($value) && trim($value) !== '' && ! MailchimpApiKey::isWellFormed($value)) {
                                     $fail(__('newsletter::messages.settings.errors.api_key_malformed'));
                                 }
                             })
                             ->live(onBlur: true)
-                            ->afterStateUpdated(function (Set $set, ?string $state): void {
+                            ->afterStateUpdated(function (Set $set, #[SensitiveParameter] ?string $state): void {
                                 $set('server', $this->serverFor($state));
                             }),
 
@@ -250,7 +249,7 @@ final class NewsletterSettingsPage extends Page implements HasForms
             listName: $listId === null ? null : ($this->lists[$listId] ?? ($stored->listId === $listId ? $stored->listName : null)),
             consentText: $this->trimmed($state['consent_text'] ?? null),
             privacyUrl: $this->trimmed($state['privacy_url'] ?? null),
-            lastCheck: new ConnectionCheck(new DateTimeImmutable('now'), $result->failure),
+            lastCheck: new ConnectionCheck(now()->toImmutable(), $result->failure),
         ));
 
         // The key goes back to an empty field: it is never shown again
@@ -336,7 +335,7 @@ final class NewsletterSettingsPage extends Page implements HasForms
         return $result;
     }
 
-    private function serverFor(?string $typed): ?string
+    private function serverFor(#[SensitiveParameter] ?string $typed): ?string
     {
         $typed = trim($typed ?? '');
 

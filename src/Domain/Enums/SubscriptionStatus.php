@@ -16,5 +16,11 @@ enum SubscriptionStatus: string
 
     case Unsubscribed = 'unsubscribed';
 
+    /**
+     * Cannot join again through the site: the provider stopped sending to it (Mailchimp "cleaned",
+     * a bounced address). Never offer «subscribe» for it
+     */
+    case Blocked = 'blocked';
+
     case NotFound = 'not_found';
 }
