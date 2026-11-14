@@ -7,17 +7,52 @@ namespace Modules\Newsletter;
 use App\Application\Modules\DTOs\PagePrefixDTO;
 use App\Application\Modules\DTOs\PermissionDTO;
 use App\Modules\ModuleServiceProvider;
+use Filament\Pages\Page;
+use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
+use Modules\Newsletter\Application\Services\NewsletterProviderFactoryInterface;
+use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
+use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterface;
+use Modules\Newsletter\Filament\Pages\NewsletterSettingsPage;
+use Modules\Newsletter\Infrastructure\Providers\ConfiguredNewsletterProvider;
+use Modules\Newsletter\Infrastructure\Providers\NewsletterProviderFactory;
+use Modules\Newsletter\Infrastructure\Services\NewsletterAvailability;
+use Modules\Newsletter\Infrastructure\Settings\ModuleNewsletterSettingsRepository;
 
 /**
  * Newsletter of the association: subscription to a Mailchimp list from the web.
  *
- * This is the skeleton: it declares the permission and the page prefix and nothing else yet.
+ * The site never stores subscribers: every question goes to the provider (NewsletterProviderInterface)
+ * and every surface asks NewsletterAvailabilityInterface before showing itself.
  */
 final class NewsletterServiceProvider extends ModuleServiceProvider
 {
     public function moduleName(): string
     {
         return 'newsletter';
+    }
+
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->bind(NewsletterSettingsRepositoryInterface::class, ModuleNewsletterSettingsRepository::class);
+        $this->app->bind(NewsletterProviderFactoryInterface::class, NewsletterProviderFactory::class);
+        // Reads the saved settings on every call, so it never keeps an old key
+        $this->app->bind(NewsletterProviderInterface::class, ConfiguredNewsletterProvider::class);
+        $this->app->bind(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
+    }
+
+    public function getSettingsPage(): string
+    {
+        return NewsletterSettingsPage::class;
+    }
+
+    /**
+     * @return array<class-string<Page>>
+     */
+    public function registerFilamentPages(): array
+    {
+        return [NewsletterSettingsPage::class];
     }
 
     /**
