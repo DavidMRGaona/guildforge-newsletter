@@ -8,7 +8,7 @@ El módulo ofrece el permiso `newsletter.configure` («Configurar el boletín»)
 
 ## Requisitos
 
-- GuildForge core `^3.73`
+- GuildForge core `^3.74`
 - PHP >= 8.5, Laravel >= 13, Filament 5
 
 El core rechaza el módulo si no se cumplen (`module.json` → `requires`).
@@ -16,7 +16,7 @@ El core rechaza el módulo si no se cumplen (`module.json` → `requires`).
 ## Instalación
 
 1. Descarga `newsletter-X.Y.Z.zip` de la última release de `DavidMRGaona/guildforge-newsletter` en GitHub.
-2. En el panel, activa el modo mantenimiento (**Configuración del sitio** → pestaña **Mantenimiento**).
+2. En el panel, activa el modo mantenimiento (**Sistema → Configuración → Configuración del sitio** → pestaña **Mantenimiento**).
 3. En **Módulos**, pulsa **Instalar / actualizar** y sube el ZIP.
 4. Pulsa **Habilitar** en el módulo: la primera vez ejecuta sus migraciones.
 5. Desactiva el modo mantenimiento.

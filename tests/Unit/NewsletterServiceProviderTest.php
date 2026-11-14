@@ -17,6 +17,8 @@ final class NewsletterServiceProviderTest extends TestCase
 
     public function test_it_declares_the_configure_permission_for_no_default_role_and_not_admin_only(): void
     {
+        $this->app['translator']->addNamespace('newsletter', dirname(__DIR__, 2).'/lang');
+
         $permissions = (new NewsletterServiceProvider($this->app))->registerPermissions();
 
         $this->assertCount(1, $permissions);
@@ -25,7 +27,8 @@ final class NewsletterServiceProviderTest extends TestCase
         $this->assertSame('newsletter', $permissions[0]->module);
         $this->assertSame([], $permissions[0]->roles);
         $this->assertFalse($permissions[0]->adminOnly);
-        $this->assertSame('newsletter::messages.permissions.configure', $permissions[0]->label);
+        $this->assertSame('Configurar el boletín', $permissions[0]->label);
+        $this->assertSame('Boletín', $permissions[0]->group);
     }
 
     public function test_the_manifest_matches_the_provider(): void
