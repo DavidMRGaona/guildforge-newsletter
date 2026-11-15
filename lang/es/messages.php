@@ -52,7 +52,7 @@ return [
             'ok' => 'Conexión correcta (comprobada el :date)',
             'failed' => 'La última comprobación falló (:date)',
             'ok_description' => 'La conexión se vuelve a comprobar cada día.',
-            'failed_hidden' => 'El boletín está oculto en la web mientras la conexión no funcione. Se vuelve a comprobar cada día y al guardar los ajustes.',
+            'failed_hidden' => 'El boletín está oculto en la web mientras la conexión no funcione. Se vuelve a comprobar cada 30 minutos y al guardar los ajustes.',
             'refused_streak' => 'Mailchimp ha rechazado o fallado :count altas seguidas',
             'refused_streak_description' => 'La conexión funciona, así que el boletín sigue visible. Revisa los campos obligatorios de la audiencia en Mailchimp.',
         ],
@@ -86,7 +86,7 @@ return [
             'subject' => 'El boletín está oculto: la conexión con Mailchimp ha fallado',
             'greeting' => 'Hola, :name',
             'body' => 'La comprobación de la conexión con Mailchimp ha fallado y el boletín ya no aparece en la web.',
-            'hint' => 'Revisa la clave y la lista en los ajustes del boletín y guárdalos: si la conexión funciona, el boletín vuelve a aparecer. También se vuelve a comprobar cada día.',
+            'hint' => 'Revisa la clave y la lista en los ajustes del boletín y guárdalos: si la conexión funciona, el boletín vuelve a aparecer. También se vuelve a comprobar cada 30 minutos mientras está oculto.',
             'action' => 'Abrir los ajustes del boletín',
         ],
         'refused_sign_ups' => [

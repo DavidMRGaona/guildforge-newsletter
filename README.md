@@ -2,13 +2,101 @@
 
 Suscripción al boletín de la asociación desde la web, con una lista de Mailchimp.
 
-> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`), sección «Boletín» del perfil, casilla del registro y vigilancia de la salud del proveedor (comprobaciones y aviso si Mailchimp falla).
+## Qué hace
 
-La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp con doble confirmación, y las campañas se siguen preparando en Mailchimp.
+La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp con doble confirmación, y las campañas se siguen preparando y enviando desde Mailchimp. El módulo añade:
 
-El módulo ofrece el permiso `newsletter.configure` («Configurar el boletín»), sin rol por defecto y sin reservarlo a la administración.
+- el **bloque «Suscripción al boletín»**, para el pie de página y para las ventanas emergentes;
+- la **página `/newsletter`**;
+- la **sección «Boletín» del perfil**, para ver el estado, suscribirse y darse de baja (solo con el email verificado);
+- la **casilla «Quiero recibir el boletín»** del registro;
+- los **ajustes** en *Sistema → Configuración → Boletín*;
+- la **vigilancia de la conexión**: si Mailchimp deja de funcionar, el boletín se oculta, se avisa a quien lo configura y vuelve solo cuando Mailchimp responde;
+- dos **guías de ayuda**, una para el panel y otra para la web.
+
+## Requisitos
+
+- GuildForge core `^3.75`
+- PHP >= 8.5, Laravel >= 13, Filament 5
+- Una cuenta de Mailchimp con una audiencia y una clave de API
+- El planificador (`schedule:run` cada minuto) y un worker de colas en marcha: las altas, las bajas y los avisos van en cola, y la comprobación de la conexión la lanza el planificador
+
+El core rechaza el módulo si no se cumplen los requisitos de versión (`module.json` → `requires`).
+
+## Instalación
+
+1. Descarga `newsletter-X.Y.Z.zip` de la última release de `DavidMRGaona/guildforge-newsletter` en GitHub.
+2. En el panel, activa el modo mantenimiento (**Sistema → Configuración → Configuración del sitio** → pestaña **Mantenimiento**).
+3. En **Módulos**, pulsa **Instalar / actualizar** y sube el ZIP.
+4. Pulsa **Habilitar** en el módulo: la primera vez ejecuta sus migraciones.
+5. Desactiva el modo mantenimiento.
+
+Las versiones nuevas se aplican desde **Actualizaciones de módulos** (también con el modo mantenimiento activo) o con `php artisan module:update newsletter`.
+
+### En desarrollo
+
+Con el repositorio clonado en `src/modules/newsletter`, desde `src/`:
+
+```bash
+php artisan module:discover
+php artisan module:enable newsletter
+```
+
+Los componentes Vue se compilan con las herramientas del core:
+
+```bash
+docker exec guildforge_node npm run build:module -- newsletter
+```
+
+En las releases los assets los compila el CI y van dentro del ZIP.
+
+## Configuración
+
+Resumen; el detalle de cada campo está en [Ajustes](#ajustes) y en la guía de ayuda del panel.
+
+1. En Mailchimp, crea una clave de API (*Profile → Extras → API keys*) y revisa que la audiencia no tenga campos obligatorios aparte del correo.
+2. En el panel, abre **Sistema → Configuración → Boletín**, pega la clave, pulsa **Probar conexión**, elige la lista y revisa el texto del consentimiento y el enlace a la política de privacidad.
+3. Pulsa **Guardar**: si la conexión funciona, el boletín ya se ofrece en la web.
+
+## Permisos
+
+El módulo define un único permiso, `newsletter.configure` («Configurar el boletín», guardado como `newsletter:newsletter.configure`). Da acceso a la página de ajustes, a la guía del panel y a los avisos de que Mailchimp ha dejado de funcionar. Ningún rol lo tiene por defecto y no está reservado a la administración: se marca a mano en el editor de roles (pestaña *Boletín*). Suscribirse y darse de baja no necesitan permisos.
+
+## Privacidad
+
+- **La web no guarda suscriptores ni sus emails.** El email y el nombre van directos a la lista de Mailchimp, que es quien manda los correos y guarda a la gente.
+- En los logs solo aparece el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp, nunca el email ni el detalle del error, que suele repetirlo.
+- Los trabajos en cola con un email van cifrados, y se borra su copia de `failed_jobs` si se rinden.
+- La clave de API se guarda cifrada y no se vuelve a mostrar.
+- La sección del perfil solo actúa sobre el email de la cuenta y solo con el email verificado.
+- Durante una impersonación no se llama a Mailchimp.
+
+## Comandos y planificador
+
+| Comando | Qué hace |
+|---|---|
+| `newsletter:check-connection` | Comprueba que Mailchimp acepta la clave y la lista guardadas. El planificador lo lanza cada día a las 06:30 (zona de visualización). Sale con error si la comprobación falla o no puede ejecutarse |
+| `newsletter:check-connection --recheck` | Solo comprueba si la última comprobación falló o hay una respuesta sin confirmar. El planificador lo lanza cada 30 minutos, y es lo que devuelve el boletín en cuanto Mailchimp vuelve |
+| `knowledge:lint --module=newsletter` | Valida las guías de ayuda del módulo (el core las sincroniza al habilitar o actualizar el módulo) |
+
+## Guías de ayuda
+
+- `newsletter.panel.settings` («Conectar el boletín con Mailchimp»): para quien tenga `newsletter.configure`. La página de ajustes tiene un botón de ayuda que la abre.
+- `newsletter.site.subscribe` («Suscribirte al boletín y darte de baja»): para la gente con sesión iniciada, mientras el boletín esté disponible (capacidad `newsletter.available`).
+
+## Tareas al poner el módulo en un sitio
+
+1. Instalar y habilitar el módulo, y comprobar que el planificador y el worker de colas están en marcha.
+2. En Mailchimp: crear la clave de API y revisar los campos obligatorios de la audiencia.
+3. En el panel: configurar el boletín (clave, lista, consentimiento y política de privacidad) y guardar con la conexión correcta.
+4. Dar el permiso «Configurar el boletín» a quien deba gestionarlo y avisar de que recibirá los avisos si Mailchimp falla.
+5. Añadir el bloque «Suscripción al boletín» al pie (*Sitio web → Pie de página*) y, si se quiere, a una ventana emergente.
+6. Crear (o cambiar) un enlace del menú público a `/newsletter`.
+7. Hacer un alta de prueba con una dirección propia y confirmar el correo de Mailchimp.
 
 ## Ajustes
+
+Desde aquí, el resto describe cómo funciona el módulo por dentro.
 
 En **Sistema → Configuración → Boletín** (necesita `newsletter.configure`; el botón «Configuración» de *Módulos* lleva aquí):
 
@@ -93,45 +181,11 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 
 **Casilla del registro** (`newsletter.subscribe`, contrato de campos del registro del core): «Quiero recibir el boletín», siempre desmarcada y solo disponible mientras lo esté el boletín. Si se marca, `SubscribeAfterRegistration` (en cola, `afterCommit`) lee la cuenta por su id, vuelve a comprobar la disponibilidad y pide el alta con `SubscriptionRequesterInterface`, que manda la confirmación de Mailchimp.
 
-## Privacidad y seguridad
+## Seguridad
 
-- Los emails no se guardan en la web ni aparecen en los logs: en los errores solo va el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp (nunca su detalle, que suele repetir el email).
 - El email, el nombre y la clave llevan `#[\SensitiveParameter]` en el proveedor, en `SubscriberHash`, en `MailchimpApiKey`, en el trabajo de alta y en quien lo encola, así que no salen en las trazas aunque `zend.exception_ignore_args` esté desactivado.
 - Durante una impersonación no se llama a Mailchimp, tampoco desde **Probar conexión** ni al guardar: el proveedor falla con `impersonation`.
-
-## Requisitos
-
-- GuildForge core `^3.75`
-- PHP >= 8.5, Laravel >= 13, Filament 5
-
-El core rechaza el módulo si no se cumplen (`module.json` → `requires`).
-
-## Instalación
-
-1. Descarga `newsletter-X.Y.Z.zip` de la última release de `DavidMRGaona/guildforge-newsletter` en GitHub.
-2. En el panel, activa el modo mantenimiento (**Sistema → Configuración → Configuración del sitio** → pestaña **Mantenimiento**).
-3. En **Módulos**, pulsa **Instalar / actualizar** y sube el ZIP.
-4. Pulsa **Habilitar** en el módulo: la primera vez ejecuta sus migraciones.
-5. Desactiva el modo mantenimiento.
-
-Las versiones nuevas se aplican desde **Actualizaciones de módulos** (también con el modo mantenimiento activo) o con `php artisan module:update newsletter`.
-
-### En desarrollo
-
-Con el repositorio clonado en `src/modules/newsletter`, desde `src/`:
-
-```bash
-php artisan module:discover
-php artisan module:enable newsletter
-```
-
-Los componentes Vue se compilan con las herramientas del core:
-
-```bash
-docker exec guildforge_node npm run build:module -- newsletter
-```
-
-En las releases los assets los compila el CI y van dentro del ZIP.
+- La capacidad `newsletter.available` de las guías pregunta a `NewsletterAvailabilityInterface` en cada llamada, así que la guía de la web desaparece con el boletín.
 
 ## Tests
 

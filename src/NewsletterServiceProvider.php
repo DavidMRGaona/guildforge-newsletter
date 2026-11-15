@@ -6,6 +6,7 @@ namespace Modules\Newsletter;
 
 use App\Application\Authorization\Services\AuthorizationServiceInterface;
 use App\Application\Impersonation\Services\ImpersonationContextInterface;
+use App\Application\Knowledge\Contracts\KnowledgeCapabilityInterface;
 use App\Application\Mail\DTOs\MailCategoryDTO;
 use App\Application\Modules\DTOs\PagePrefixDTO;
 use App\Application\Modules\DTOs\PermissionDTO;
@@ -31,6 +32,7 @@ use Modules\Newsletter\Application\Services\SubscriptionRequesterInterface;
 use Modules\Newsletter\Console\Commands\CheckConnectionCommand;
 use Modules\Newsletter\Filament\Pages\NewsletterSettingsPage;
 use Modules\Newsletter\Filament\SiteBlocks\SubscribeSiteBlock;
+use Modules\Newsletter\Infrastructure\Knowledge\NewsletterAvailableCapability;
 use Modules\Newsletter\Infrastructure\Providers\ConfiguredNewsletterProvider;
 use Modules\Newsletter\Infrastructure\Providers\NewsletterProviderFactory;
 use Modules\Newsletter\Infrastructure\Registration\SubscribeAfterRegistration;
@@ -179,6 +181,16 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
     public function registerSiteBlocks(): array
     {
         return [SubscribeSiteBlock::class];
+    }
+
+    /**
+     * The site guide shows only while the newsletter is on offer (the same rule as every surface).
+     *
+     * @return array<class-string<KnowledgeCapabilityInterface>>
+     */
+    public function registerKnowledgeCapabilities(): array
+    {
+        return [NewsletterAvailableCapability::class];
     }
 
     public function getSettingsPage(): string

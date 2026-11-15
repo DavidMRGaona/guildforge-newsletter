@@ -7,6 +7,7 @@ namespace Modules\Newsletter\Filament\Pages;
 use App\Application\Services\TimezoneServiceInterface;
 use App\Filament\Clusters\SettingsCluster;
 use App\Filament\Concerns\ChecksPermissions;
+use App\Filament\Concerns\HasKnowledgeGuideAction;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -47,6 +48,7 @@ use SensitiveParameter;
 final class NewsletterSettingsPage extends Page implements HasForms
 {
     use ChecksPermissions;
+    use HasKnowledgeGuideAction;
     use InteractsWithForms;
 
     public const string PERMISSION = 'newsletter:newsletter.configure';
@@ -109,6 +111,16 @@ final class NewsletterSettingsPage extends Page implements HasForms
             'list_id' => $settings->listId,
             'consent_text' => $settings->consentText ?? __('newsletter::messages.settings.consent_default'),
             'privacy_url' => $settings->privacyUrl,
+        ]);
+    }
+
+    /**
+     * @return array<Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return array_filter([
+            $this->knowledgeGuideAction('newsletter.panel.settings'),
         ]);
     }
 
