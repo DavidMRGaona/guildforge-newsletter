@@ -2,7 +2,7 @@
 
 Suscripción al boletín de la asociación desde la web, con una lista de Mailchimp.
 
-> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`), sección «Boletín» del perfil y casilla del registro. La salud del proveedor llega en la siguiente issue del hito.
+> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`), sección «Boletín» del perfil, casilla del registro y vigilancia de la salud del proveedor (comprobaciones y aviso si Mailchimp falla).
 
 La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp con doble confirmación, y las campañas se siguen preparando en Mailchimp.
 
@@ -19,6 +19,17 @@ En **Sistema → Configuración → Boletín** (necesita `newsletter.configure`;
 - **Texto del consentimiento** y **enlace a la política de privacidad** (una dirección `https://…` o una ruta de la web, como `/privacidad`).
 
 Guardar comprueba siempre la conexión y guarda la fecha y el resultado de la última comprobación, que se ven arriba de la página. Los ajustes se guardan aunque la conexión falle, pero entonces el boletín no se ofrece en la web.
+
+## Salud del proveedor
+
+- `newsletter:check-connection` se lanza cada día en el planificador (06:30, en la zona de visualización) y también a mano. Pregunta a Mailchimp con la clave y la lista guardadas y guarda el resultado. Sale con error si la comprobación falla o no ha podido ejecutarse.
+- **Caída**: una comprobación que falla deja el módulo no disponible (se ocultan el bloque, la página, la sección «Boletín» del perfil y la casilla del registro) y avisa, una sola vez por caída, a quien tenga `newsletter.configure`: la notificación `newsletter.provider-down` va por la campana y por correo, según las preferencias de cada persona. Una comprobación correcta (la diaria, la de un fallo repetido, la de reintento o la de guardar los ajustes) lo restablece y permite avisar de la siguiente caída. Si la caída ya se vio al guardar los ajustes, no se vuelve a avisar.
+- **Mailchimp sin respuesta** (tiempo agotado, 429, 5xx): no apaga el boletín a la primera. Cuenta como caída solo con dos respuestas así seguidas, separadas al menos 10 minutos. Cualquier otro fallo (clave rechazada, lista inexistente…) lo apaga a la primera.
+- **Reintento**: `newsletter:check-connection --recheck` cada 30 minutos en el planificador. Solo comprueba si la última comprobación falló o hay una respuesta sin confirmar, así que restablece el boletín en cuanto Mailchimp vuelve.
+- **Altas fallidas**: tres seguidas (`SubscribeFailureCounterInterface`) piden una comprobación en cola, como mucho una cada 15 minutos. El disparador solo lanza la comprobación: nunca apaga el boletín, porque cualquiera puede provocar fallos con direcciones malas.
+- **Altas rechazadas con la conexión sana**: si la racha llega a 5 mientras la comprobación pasa (por ejemplo, un campo obligatorio de la audiencia que el formulario no pide), se avisa una vez por racha a quien configura el módulo, con la misma categoría, y los ajustes muestran la racha. No apaga el boletín. Un alta que sale bien reinicia la racha.
+- **Sin carreras**: `NewsletterSettingsRepositoryInterface::recordCheck()` es un compare-and-set. Bajo un cierre de caché (que también toma `save()`) lee la fila directamente de la tabla, no de la caché de ajustes, y escribe solo `last_check` si la clave, la lista y la última comprobación guardada siguen siendo las del inicio. Devuelve la comprobación que sustituyó, y el aviso de caída depende de ella: así una comprobación lenta nunca pisa un «ok» más nuevo ni avisa dos veces.
+- Durante una impersonación no se comprueba, no se registra nada y no se avisa. Los ajustes del panel muestran el estado y la fecha de la última comprobación, y si el boletín está oculto por una caída.
 
 ## Disponibilidad
 
@@ -62,7 +73,7 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 - `failed()` queda como red para lo que `handle()` no puede capturar (un tiempo agotado, un worker que muere a mitad): hace lo mismo y borra la copia de `failed_jobs`, que el worker escribe después de llamarlo, con un listener de `JobFailed` que corre detrás del suyo.
 - Durante una impersonación no se encola nada (`SubscriptionRequesterInterface` comprueba `ImpersonationContextInterface::isActive()`), aunque la respuesta sea la misma.
 
-`SubscribeFailureCounterInterface` cuenta las altas fallidas seguidas, en la caché compartida por los workers: suma uno por cada trabajo que se rinde y por cada email que Mailchimp rechaza (`Rejected`), y solo vuelve a cero cuando Mailchimp escribe en la lista (`ConfirmationRequested`). Las respuestas que no escriben nada (ya suscrito o pendiente, rebotado) lo dejan como está, para que las altas repetidas de quien ya está en la lista no tapen un proveedor que rechaza a todos los nuevos. Es atómico sin bloqueo: `add()` crea la clave con caducidad solo si falta o ha caducado e `increment()` suma sin tocar la caducidad (con el store `database`, un insert y un update con la fila bloqueada); la racha caduca un día después de su primer fallo. Lo usará la comprobación de salud del proveedor; por ahora solo cuenta.
+`SubscribeFailureCounterInterface` cuenta las altas fallidas seguidas, en la caché compartida por los workers: suma uno por cada trabajo que se rinde y por cada email que Mailchimp rechaza (`Rejected`), y solo vuelve a cero cuando Mailchimp escribe en la lista (`ConfirmationRequested`). Las respuestas que no escriben nada (ya suscrito o pendiente, rebotado) lo dejan como está, para que las altas repetidas de quien ya está en la lista no tapen un proveedor que rechaza a todos los nuevos. Es atómico sin bloqueo: `add()` crea la clave con caducidad solo si falta o ha caducado e `increment()` suma sin tocar la caducidad (con el store `database`, un insert y un update con la fila bloqueada); la racha caduca un día después de su primer fallo. La comprobación de salud del proveedor lo lee (ver «Salud del proveedor»): desde el tercer fallo pide una comprobación y, con la racha en 5 y la conexión sana, avisa de que Mailchimp rechaza las altas.
 
 ## Perfil y registro
 

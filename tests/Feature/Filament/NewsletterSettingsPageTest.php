@@ -21,6 +21,7 @@ use Mockery\MockInterface;
 use Modules\Newsletter\Application\DTOs\NewsletterSettings;
 use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterface;
+use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Domain\Enums\ConnectionFailure;
 use Modules\Newsletter\Domain\ValueObjects\ConnectionCheck;
 use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
@@ -352,7 +353,36 @@ final class NewsletterSettingsPageTest extends ModuleTestCase
         $this->actingAsPanelAdmin();
 
         Livewire::test(NewsletterSettingsPage::class)
-            ->assertSee('Mailchimp no responde');
+            ->assertSee('Mailchimp no responde')
+            ->assertSee('El boletín está oculto en la web mientras la conexión no funcione');
+    }
+
+    public function test_a_streak_of_refused_sign_ups_is_shown_from_five(): void
+    {
+        $this->storeConfigured();
+        $this->actingAsPanelAdmin();
+        $counter = $this->app->make(SubscribeFailureCounterInterface::class);
+
+        for ($i = 0; $i < 4; $i++) {
+            $counter->recordFailure();
+        }
+        Livewire::test(NewsletterSettingsPage::class)->assertDontSee('altas seguidas');
+
+        $counter->recordFailure();
+        Livewire::test(NewsletterSettingsPage::class)
+            ->assertSee('rechazado o fallado 5 altas seguidas')
+            ->assertSee('el boletín sigue visible');
+    }
+
+    public function test_a_working_connection_says_it_is_checked_every_day(): void
+    {
+        $this->storeConfigured(new ConnectionCheck(new DateTimeImmutable('2026-11-14 09:30:00 UTC'), null));
+        $this->actingAsPanelAdmin();
+
+        Livewire::test(NewsletterSettingsPage::class)
+            ->assertSee('Conexión correcta')
+            ->assertSee('La conexión se vuelve a comprobar cada día')
+            ->assertDontSee('El boletín está oculto');
     }
 
     private function fakeLists(): void
