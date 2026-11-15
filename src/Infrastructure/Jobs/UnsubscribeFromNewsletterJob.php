@@ -31,6 +31,7 @@ use Throwable;
 final class UnsubscribeFromNewsletterJob implements ShouldBeEncrypted, ShouldQueue
 {
     use Dispatchable;
+    use ForgetsFailedJobCopy;
     use InteractsWithQueue;
     use Queueable;
 
@@ -46,6 +47,8 @@ final class UnsubscribeFromNewsletterJob implements ShouldBeEncrypted, ShouldQue
     public function __construct(
         public readonly string $userId,
         #[SensitiveParameter] public readonly string $email,
+        /** Milliseconds since the epoch when the person asked; a later sign-up cancels this job */
+        public readonly int $requestedAt = 0,
     ) {}
 
     /**
@@ -58,6 +61,12 @@ final class UnsubscribeFromNewsletterJob implements ShouldBeEncrypted, ShouldQue
 
     public function handle(NewsletterProviderInterface $provider): void
     {
+        // The person joined again after asking to leave (this job was waiting to be retried):
+        // their last choice wins
+        if ($this->joinedAgainSince()) {
+            return;
+        }
+
         try {
             $provider->unsubscribe($this->email);
         } catch (Throwable $e) {
@@ -71,9 +80,25 @@ final class UnsubscribeFromNewsletterJob implements ShouldBeEncrypted, ShouldQue
         }
     }
 
+    /**
+     * Safety net for what handle() cannot catch (a timeout): the worker writes the failed job, with
+     * its payload, after this returns, so that copy is removed too.
+     */
     public function failed(?Throwable $exception): void
     {
         $this->giveUp($exception);
+        $this->forgetFailedCopy();
+    }
+
+    private function joinedAgainSince(): bool
+    {
+        try {
+            $joinedAt = app(Cache::class)->get(ProfileNewsletterService::joinedAgainKey($this->email));
+        } catch (Throwable) {
+            return false;
+        }
+
+        return is_int($joinedAt) && $joinedAt >= $this->requestedAt;
     }
 
     private function giveUp(?Throwable $exception): void

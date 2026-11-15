@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
+use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Infrastructure\Jobs\SubscribeToNewsletterJob;
 use Modules\Newsletter\Infrastructure\Jobs\UnsubscribeFromNewsletterJob;
 use Modules\Newsletter\NewsletterServiceProvider;
@@ -274,9 +275,64 @@ final class ProfileNewsletterTest extends ModuleTestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('profileNewsletterVisible', true)
-                ->where('profileNewsletter.endpoint', '/perfil/boletin'));
+                ->where('profileNewsletter.endpoint', '/perfil/boletin')
+                ->where('profileNewsletter.verified', true)
+                ->where('profileNewsletter.verifyUrl', '/verificar-email'));
 
         Http::assertNothingSent();
+    }
+
+    public function test_the_profile_tells_the_section_when_the_email_is_not_verified(): void
+    {
+        $user = UserModel::factory()->unverified()->create(['email' => 'luis@example.com']);
+
+        $this->actingAs($user)->get('/perfil')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('profileNewsletterVisible', true)
+                ->where('profileNewsletter.verified', false));
+
+        Http::assertNothingSent();
+    }
+
+    public function test_the_pending_state_after_joining_is_remembered_only_for_a_minute(): void
+    {
+        $this->fakeMember('unsubscribed');
+        $this->actingAs($this->user)->postJson('/perfil/boletin')->assertExactJson(['status' => 'pending']);
+
+        $this->travel(61)->seconds();
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 'unsubscribed'], 200)]);
+
+        // The job did not make the provider say pending: the profile tells the truth again
+        $this->actingAs($this->user)->getJson('/perfil/boletin')->assertExactJson(['status' => 'unsubscribed']);
+    }
+
+    public function test_joining_again_cancels_an_unsubscription_that_was_waiting(): void
+    {
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::sequence()
+            ->push(['status' => 'subscribed'], 200)
+            ->push(['status' => 'unsubscribed'], 200)]);
+
+        $this->actingAs($this->user)->deleteJson('/perfil/boletin')->assertOk();
+        $this->travel(2)->seconds();
+
+        // The person changes their mind before the unsubscription ran
+        Cache::flush();
+        $this->actingAs($this->user)->postJson('/perfil/boletin')->assertExactJson(['status' => 'pending']);
+
+        $waiting = null;
+        Queue::assertPushed(UnsubscribeFromNewsletterJob::class, function (UnsubscribeFromNewsletterJob $job) use (&$waiting): bool {
+            $waiting = $job;
+
+            return true;
+        });
+        $this->assertInstanceOf(UnsubscribeFromNewsletterJob::class, $waiting);
+        $sent = count(Http::recorded());
+
+        $waiting->handle($this->app->make(NewsletterProviderInterface::class));
+
+        // The waiting unsubscription stood down: nothing more went to the provider
+        $this->assertCount($sent, Http::recorded());
     }
 
     public function test_the_profile_hides_the_section_while_the_newsletter_is_not_available(): void

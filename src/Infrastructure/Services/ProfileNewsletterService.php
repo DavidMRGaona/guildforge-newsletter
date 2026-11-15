@@ -7,6 +7,7 @@ namespace Modules\Newsletter\Infrastructure\Services;
 use App\Application\Impersonation\Services\ImpersonationContextInterface;
 use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Application\Services\ProfileNewsletterServiceInterface;
@@ -21,6 +22,12 @@ final readonly class ProfileNewsletterService implements ProfileNewsletterServic
 {
     /** Seconds the status of an account is remembered */
     public const int CACHE_SECONDS = 300;
+
+    /** «Pending» after asking to join is a guess until the job runs: short, so the provider decides soon */
+    public const int PENDING_SECONDS = 60;
+
+    /** Long enough to outlive the retries of a waiting unsubscription */
+    private const int JOINED_AGAIN_SECONDS = 86400;
 
     public function __construct(
         private NewsletterProviderInterface $provider,
@@ -68,7 +75,8 @@ final readonly class ProfileNewsletterService implements ProfileNewsletterServic
 
         $this->subscriptions->request($email, $name);
         // What the provider will answer once the job ran: the confirmation email is on its way
-        $this->remember(self::key($userId, $email), ProfileNewsletterState::Pending);
+        $this->markJoinedAgain($email);
+        $this->remember(self::key($userId, $email), ProfileNewsletterState::Pending, self::PENDING_SECONDS);
 
         return ProfileNewsletterState::Pending;
     }
@@ -81,7 +89,7 @@ final readonly class ProfileNewsletterService implements ProfileNewsletterServic
             return $state;
         }
 
-        $this->bus->dispatch(new UnsubscribeFromNewsletterJob($userId, $email));
+        $this->bus->dispatch(new UnsubscribeFromNewsletterJob($userId, $email, Carbon::now()->getTimestampMs()));
         $this->remember(self::key($userId, $email), ProfileNewsletterState::Unsubscribed);
 
         return ProfileNewsletterState::Unsubscribed;
@@ -107,10 +115,28 @@ final readonly class ProfileNewsletterService implements ProfileNewsletterServic
         return is_string($value) ? ProfileNewsletterState::tryFrom($value) : null;
     }
 
-    private function remember(string $key, ProfileNewsletterState $state): void
+    /**
+     * By the hash of the address: when a person joins, a waiting unsubscription of the same address
+     * sees it and stands down.
+     */
+    public static function joinedAgainKey(#[SensitiveParameter] string $email): string
+    {
+        return 'newsletter:joined-again:'.SubscriberHash::fromEmail($email)->value();
+    }
+
+    private function markJoinedAgain(#[SensitiveParameter] string $email): void
     {
         try {
-            $this->cache->put($key, $state->value, self::CACHE_SECONDS);
+            $this->cache->put(self::joinedAgainKey($email), Carbon::now()->getTimestampMs(), self::JOINED_AGAIN_SECONDS);
+        } catch (Throwable) {
+            // Without the mark a waiting unsubscription may still run: rare, and the profile shows the truth
+        }
+    }
+
+    private function remember(string $key, ProfileNewsletterState $state, int $seconds = self::CACHE_SECONDS): void
+    {
+        try {
+            $this->cache->put($key, $state->value, $seconds);
         } catch (Throwable) {
             // Without a cache every visit asks the provider: slower, never wrong
         }

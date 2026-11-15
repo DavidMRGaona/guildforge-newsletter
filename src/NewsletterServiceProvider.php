@@ -132,7 +132,12 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         };
 
         Inertia::share('profileNewsletterVisible', static fn (): ?bool => request()->route()?->getName() === 'profile.show' ? $visible() : null);
-        Inertia::share('profileNewsletter', static fn (): ?array => $visible() ? ['endpoint' => route('newsletter.profile', absolute: false)] : null);
+        Inertia::share('profileNewsletter', static fn (): ?array => $visible() ? [
+            'endpoint' => route('newsletter.profile', absolute: false),
+            // An address nobody proved theirs is never read or changed (ProfileNewsletterController)
+            'verified' => auth()->user()?->hasVerifiedEmail() === true,
+            'verifyUrl' => route('verification.notice', absolute: false),
+        ] : null);
     }
 
     /**

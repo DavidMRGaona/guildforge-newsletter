@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Modules\Newsletter\Domain\Enums\ProfileNewsletterState;
+use Modules\Newsletter\Infrastructure\Jobs\ForgetsFailedJobCopy;
+use Modules\Newsletter\Infrastructure\Jobs\SubscribeToNewsletterJob;
 use Modules\Newsletter\Infrastructure\Jobs\UnsubscribeFromNewsletterJob;
 use Modules\Newsletter\Infrastructure\Services\ProfileNewsletterService;
 use Modules\Newsletter\Tests\Support\ConfiguresNewsletter;
@@ -82,5 +84,36 @@ final class UnsubscribeFromNewsletterJobTest extends ModuleTestCase
         (new UnsubscribeFromNewsletterJob(self::USER, self::EMAIL))->failed(new RuntimeException('ana@example.com timed out'));
 
         $this->assertNull(Cache::get($key));
+    }
+
+    public function test_an_unsubscription_older_than_a_later_sign_up_does_nothing(): void
+    {
+        Cache::put(ProfileNewsletterService::joinedAgainKey(self::EMAIL), 2000, 300);
+
+        UnsubscribeFromNewsletterJob::dispatchSync(self::USER, self::EMAIL, 1000);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_an_unsubscription_asked_after_the_last_sign_up_still_runs(): void
+    {
+        Cache::put(ProfileNewsletterService::joinedAgainKey(self::EMAIL), 1000, 300);
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 'subscribed'], 200)]);
+
+        UnsubscribeFromNewsletterJob::dispatchSync(self::USER, self::EMAIL, 2000);
+
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'PATCH');
+    }
+
+    public function test_the_safety_net_removes_the_failed_job_copy_like_the_subscription_does(): void
+    {
+        $this->assertContains(
+            ForgetsFailedJobCopy::class,
+            class_uses(UnsubscribeFromNewsletterJob::class),
+        );
+        $this->assertContains(
+            ForgetsFailedJobCopy::class,
+            class_uses(SubscribeToNewsletterJob::class),
+        );
     }
 }

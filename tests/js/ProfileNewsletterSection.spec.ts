@@ -13,10 +13,15 @@ function answer(status: number, body: unknown): Response {
 }
 
 async function mountSection(
-    profileNewsletter: ProfileNewsletter | null = { endpoint: ENDPOINT }
+    profileNewsletter: ProfileNewsletter | null = {
+        endpoint: ENDPOINT,
+        verified: true,
+        verifyUrl: '/verificar-email',
+    }
 ): Promise<VueWrapper> {
     const wrapper = mount(ProfileNewsletterSection, {
         props: { profileNewsletter, profileNewsletterVisible: true },
+        attachTo: document.body,
     });
     await flushPromises();
 
@@ -158,5 +163,44 @@ describe('ProfileNewsletterSection', () => {
         const wrapper = await mountSection();
 
         expect(wrapper.get('[role="alert"]').text()).toContain('No se ha podido completar');
+    });
+
+    it('shows only the verification message, with a link, and asks nothing when the email is not verified', async () => {
+        const wrapper = await mountSection({
+            endpoint: ENDPOINT,
+            verified: false,
+            verifyUrl: '/verificar-email',
+        });
+
+        expect(wrapper.get('[data-testid="newsletter-verify"]').text()).toContain(
+            'verifica primero'
+        );
+        expect(wrapper.get('a').attributes('href')).toBe('/verificar-email');
+        expect(wrapper.find('button').exists()).toBe(false);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('announces the status in a polite live region', async () => {
+        fetchMock.mockResolvedValue(answer(200, { status: 'subscribed' }));
+
+        const wrapper = await mountSection();
+        const line = wrapper.get('[data-testid="newsletter-status"]');
+
+        expect(line.attributes('role')).toBe('status');
+        expect(line.attributes('aria-live')).toBe('polite');
+    });
+
+    it('moves the focus to the status when the pressed button goes away', async () => {
+        fetchMock
+            .mockResolvedValueOnce(answer(200, { status: 'subscribed' }))
+            .mockResolvedValueOnce(answer(200, { status: 'unsubscribed' }));
+
+        const wrapper = await mountSection();
+        await wrapper.get('button').trigger('click');
+        await flushPromises();
+
+        expect(document.activeElement).toBe(
+            wrapper.get('[data-testid="newsletter-status"]').element
+        );
     });
 });

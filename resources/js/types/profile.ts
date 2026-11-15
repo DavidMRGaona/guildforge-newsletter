@@ -6,6 +6,10 @@ export type ProfileNewsletterStatus =
 export interface ProfileNewsletter {
     /** Where the section asks and sends (`/perfil/boletin`) */
     endpoint: string;
+    /** False: the account's email is not verified, so nothing is asked or offered */
+    verified: boolean;
+    /** Where to verify it */
+    verifyUrl: string;
 }
 
 export type ProfileNewsletterResult =

@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Modules\Newsletter\Infrastructure\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
@@ -36,6 +34,7 @@ use Throwable;
 final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
 {
     use Dispatchable;
+    use ForgetsFailedJobCopy;
     use InteractsWithQueue;
     use Queueable;
 
@@ -115,39 +114,5 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
         if ($failure !== ConnectionFailure::Impersonation) {
             $failures->recordFailure();
         }
-    }
-
-    /**
-     * The worker writes the failed job to failed_jobs after failed() returns (when it hears
-     * JobFailed), so the copy is deleted from a listener that runs after the worker's own.
-     */
-    private function forgetFailedCopy(): void
-    {
-        $uuid = $this->job?->uuid();
-
-        if (! is_string($uuid) || $uuid === '') {
-            return;
-        }
-
-        $forget = static function () use ($uuid): void {
-            try {
-                app('queue.failer')->forget($uuid);
-            } catch (Throwable $e) {
-                Log::warning('Newsletter: a failed subscription could not be removed from the failed jobs', ['exception' => $e::class]);
-            }
-        };
-
-        // In case the copy is already there
-        $forget();
-
-        $handled = false;
-        app(Dispatcher::class)->listen(JobFailed::class, static function (JobFailed $event) use ($uuid, $forget, &$handled): void {
-            if ($handled || $event->job->uuid() !== $uuid) {
-                return;
-            }
-
-            $handled = true;
-            $forget();
-        });
     }
 }

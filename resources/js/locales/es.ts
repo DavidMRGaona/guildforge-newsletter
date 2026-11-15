@@ -2,16 +2,20 @@ export default {
     newsletter: {
         title: 'Boletín',
         profile: {
+            status: {
+                loading: 'Consultando tu suscripción…',
+                subscribed: 'Estás suscrito al boletín con el correo de tu cuenta.',
+                pending:
+                    'Te hemos enviado un correo para confirmar la suscripción. Hasta que abras el enlace no recibirás el boletín.',
+                unsubscribed: 'No estás suscrito al boletín.',
+                blocked:
+                    'Esa dirección no puede recibir el boletín: el servicio de correo la ha marcado como no válida. Cambia el correo de tu cuenta si quieres recibirlo.',
+                unavailable: 'No hemos podido consultar tu suscripción ahora mismo.',
+            },
+            verify: 'Para gestionar el boletín desde aquí, verifica primero el correo de tu cuenta.',
+            verify_link: 'Verificar mi correo',
             tabLabel: 'Boletín',
             title: 'Boletín',
-            loading: 'Consultando tu suscripción…',
-            subscribed: 'Estás suscrito al boletín con el correo de tu cuenta.',
-            pending:
-                'Te hemos enviado un correo para confirmar la suscripción. Hasta que abras el enlace no recibirás el boletín.',
-            unsubscribed: 'No estás suscrito al boletín.',
-            blocked:
-                'Esa dirección no puede recibir el boletín: el servicio de correo la ha marcado como no válida. Cambia el correo de tu cuenta si quieres recibirlo.',
-            unavailable: 'No hemos podido consultar tu suscripción ahora mismo.',
             subscribe: 'Suscribirme',
             unsubscribe: 'Darme de baja',
             retry: 'Volver a probar',

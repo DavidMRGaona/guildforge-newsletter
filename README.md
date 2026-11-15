@@ -76,7 +76,9 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 | `blocked` (dirección rebotada) | Esa dirección no puede recibir el boletín | — |
 | `unavailable` (el proveedor no responde) | No hemos podido consultar | Volver a probar |
 
-`POST` y `DELETE /perfil/boletin` usan siempre el email de la cuenta con la sesión iniciada, nunca uno de la petición, y solo actúan si el estado lo permite (no se encola un alta para una dirección rebotada ni una baja para quien no está en la lista). Ambos van en cola con trabajos cifrados (`SubscribeToNewsletterJob`, `UnsubscribeFromNewsletterJob`). Las rutas llevan `auth`, `email.verified-if-required` y `throttle:newsletter-profile` (30 lecturas o 6 cambios por minuto y cuenta) y no existen mientras el boletín no esté disponible. Durante una impersonación la pestaña se oculta y nada se consulta ni se escribe.
+**Solo con el email verificado**, sea cual sea el ajuste de verificación del sitio: cualquiera puede registrarse con una dirección que no es suya y no debe poder leer ni cambiar su suscripción. Las tres rutas responden 403 `email_verification_required` a una cuenta sin verificar y la sección solo muestra un aviso con el enlace a `verification.notice`.
+
+`POST` y `DELETE /perfil/boletin` usan siempre el email de la cuenta con la sesión iniciada, nunca uno de la petición, y solo actúan si el estado lo permite (no se encola un alta para una dirección rebotada ni una baja para quien no está en la lista). Ambos van en cola con trabajos cifrados (`SubscribeToNewsletterJob`, `UnsubscribeFromNewsletterJob`). Tras pedir el alta se recuerda «pendiente» solo 60 segundos (el resto de estados, 5 minutos) y se anota por hash que la persona volvió a apuntarse: una baja que esperaba un reintento comprueba la marca y se descarta si el alta fue posterior. Las rutas llevan `auth`, `email.verified-if-required` y `throttle:newsletter-profile` (30 lecturas o 6 cambios por minuto y cuenta) y no existen mientras el boletín no esté disponible. Durante una impersonación la pestaña se oculta (props compartidas) y el servicio y el requester no consultan ni escriben nada. Los trabajos de alta y baja borran de `failed_jobs` su copia cifrada si se rinden (`ForgetsFailedJobCopy`).
 
 **Casilla del registro** (`newsletter.subscribe`, contrato de campos del registro del core): «Quiero recibir el boletín», siempre desmarcada y solo disponible mientras lo esté el boletín. Si se marca, `SubscribeAfterRegistration` (en cola, `afterCommit`) lee la cuenta por su id, vuelve a comprobar la disponibilidad y pide el alta con `SubscriptionRequesterInterface`, que manda la confirmación de Mailchimp.
 
@@ -88,7 +90,7 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 
 ## Requisitos
 
-- GuildForge core `^3.76`
+- GuildForge core `^3.75`
 - PHP >= 8.5, Laravel >= 13, Filament 5
 
 El core rechaza el módulo si no se cumplen (`module.json` → `requires`).
