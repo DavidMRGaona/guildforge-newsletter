@@ -108,6 +108,7 @@ return [
 
     'profile' => [
         'errors' => [
+            'verify_email' => 'Verifica el correo de tu cuenta para gestionar la suscripción.',
             'too_many_attempts' => 'Has hecho demasiados intentos. Espera unos minutos y vuelve a probar.',
         ],
     ],

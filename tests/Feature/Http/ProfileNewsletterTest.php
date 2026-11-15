@@ -220,6 +220,20 @@ final class ProfileNewsletterTest extends ModuleTestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_an_unverified_address_is_refused_even_when_the_site_does_not_require_verification(): void
+    {
+        $user = UserModel::factory()->unverified()->create(['email' => 'luis@example.com']);
+
+        foreach (['getJson', 'postJson', 'deleteJson'] as $method) {
+            $this->actingAs($user)->{$method}('/perfil/boletin')
+                ->assertForbidden()
+                ->assertJsonPath('error', 'email_verification_required');
+        }
+
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
     public function test_the_routes_do_not_exist_while_the_newsletter_is_not_available(): void
     {
         $this->configureNewsletter(lastCheckOk: false);

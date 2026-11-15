@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Newsletter\Http\Controllers;
 
 use App\Infrastructure\Persistence\Eloquent\Models\UserModel;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Modules\Newsletter\Application\Services\ProfileNewsletterServiceInterface;
@@ -47,6 +48,15 @@ final readonly class ProfileNewsletterController
         $user = $request->user();
 
         abort_unless($user instanceof UserModel, 401);
+
+        // Whatever the site's verification setting says: anyone can register with an address that is
+        // not theirs, and must not read or change that address's subscription
+        if (! $user->hasVerifiedEmail()) {
+            throw new HttpResponseException(response()->json([
+                'message' => (string) __('newsletter::messages.profile.errors.verify_email'),
+                'error' => 'email_verification_required',
+            ], 403));
+        }
 
         return $user;
     }
