@@ -16,7 +16,7 @@ La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp
 
 ## Requisitos
 
-- GuildForge core `^3.75`
+- GuildForge core `^3.78`
 - PHP >= 8.5, Laravel >= 13, Filament 5
 - Una cuenta de Mailchimp con una audiencia y una clave de API
 - El planificador (`schedule:run` cada minuto) y un worker de colas en marcha: las altas, las bajas y los avisos van en cola, y la comprobación de la conexión la lanza el planificador
@@ -147,7 +147,7 @@ El mismo formulario aparece en tres sitios, y en ninguno mientras el boletín no
 - **Bloque `newsletter.subscribe`** para el pie (*Sitio web → Pie de página*) y para las ventanas emergentes de anuncios. Sus ajustes son planos: texto de presentación, texto del botón y si se pide el nombre. Con el proveedor caído el bloque no se pinta.
 - **Página `/newsletter`** (`newsletter.show`), que responde 404 si el boletín no está disponible (`EnsureNewsletterIsAvailable`, en las dos rutas, antes del límite y de la validación). Las ventanas emergentes nunca salen en ella. El enlace del menú se pone a mano (*Menú público*, enlace a `/newsletter`).
 
-Pide email, nombre opcional y una casilla de consentimiento obligatoria con el texto y el enlace de los ajustes. Lleva un campo trampa (`website`) que la gente no ve: con cualquier valor en él (texto, una lista…) la petición no se valida, recibe la misma respuesta y no se envía nada. Con sesión, el email y el nombre de la cuenta ya vienen puestos. Dentro de una columna del pie configurable (`data-footer-column`) toma los colores oscuros del pie; en una ventana o en la página, los de la web. Cada error va bajo su campo y lo nombra (`aria-describedby`), el foco va al primero, y el resultado se anuncia y recibe el foco.
+Pide email, nombre opcional y una casilla de consentimiento obligatoria con el texto y el enlace de los ajustes. Lleva un campo trampa (`website`) que la gente no ve: con cualquier valor en él (texto, una lista…) la petición no se valida, recibe la misma respuesta y no se envía nada. Con sesión, el email y el nombre de la cuenta ya vienen puestos. En el pie configurable toma los colores oscuros del pie; en una ventana, los de la página (lo decide la ubicación que el core le da con `useSiteBlockPlacement()`, desde el core 3.78). Cada error va bajo su campo y lo nombra (`aria-describedby`), el foco va al primero, y el resultado se anuncia y recibe el foco.
 
 `POST /newsletter` (`newsletter.store`) acepta JSON (el formulario lo envía así, sin recargar la página) y formularios normales (vuelve atrás con el mensaje). Tiene un límite por IP (5 por minuto y 20 por hora, que no cuenta mientras el boletín no está disponible) y `email.verified-if-required`: una cuenta que debe verificar su email lo hace antes. La verificación del core va en el grupo `web`, antes que las rutas, así que una cuenta sin verificar recibe su 403 incluso con el boletín no disponible. La respuesta es siempre «Revisa tu correo…», sin decir si el email ya estaba en la lista.
 
