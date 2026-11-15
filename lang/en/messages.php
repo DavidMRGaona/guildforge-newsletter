@@ -51,6 +51,10 @@ return [
             'never_description' => 'The newsletter does not appear on the site until the settings are saved with a working connection.',
             'ok' => 'Connection working (checked on :date)',
             'failed' => 'The last check failed (:date)',
+            'ok_description' => 'The connection is checked again every day.',
+            'failed_hidden' => 'The newsletter is hidden from the site while the connection does not work. It is checked again every day and when the settings are saved.',
+            'refused_streak' => 'Mailchimp has refused or failed :count sign-ups in a row',
+            'refused_streak_description' => 'The connection works, so the newsletter is still shown. Review the required fields of the audience in Mailchimp.',
         ],
 
         'failures' => [
@@ -70,6 +74,29 @@ return [
             'saved_available' => 'The connection works: the newsletter can now appear on the site.',
             'saved_unavailable' => 'Settings saved without a connection',
             'hidden_until_connected' => 'The newsletter does not appear on the site until the connection works.',
+        ],
+    ],
+
+    'provider_down' => [
+        'section' => 'Newsletter',
+        'label' => 'Notice that Mailchimp stopped working',
+        'description' => 'Notice, for whoever configures the newsletter, when Mailchimp stops accepting the key or the list and the newsletter is hidden from the site.',
+        'notice' => 'The newsletter is hidden: the connection with Mailchimp failed',
+        'mail' => [
+            'subject' => 'The newsletter is hidden: the connection with Mailchimp failed',
+            'greeting' => 'Hello, :name',
+            'body' => 'The check of the connection with Mailchimp failed and the newsletter no longer appears on the site.',
+            'hint' => 'Review the key and the list in the newsletter settings and save them: if the connection works, the newsletter appears again. It is also checked again every day.',
+            'action' => 'Open the newsletter settings',
+        ],
+        'refused_sign_ups' => [
+            'notice' => 'Mailchimp is refusing newsletter sign-ups',
+            'reason' => 'Mailchimp refuses sign-ups although the connection works: review the required fields of the audience.',
+            'mail' => [
+                'subject' => 'Mailchimp is refusing newsletter sign-ups',
+                'body' => 'The connection with Mailchimp works, but several sign-ups in a row have been refused. The newsletter is still shown on the site.',
+                'hint' => 'This usually happens when the Mailchimp list has required fields (in the audience) that the form does not ask for. Review those fields in Mailchimp and try a test sign-up.',
+            ],
         ],
     ],
 

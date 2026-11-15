@@ -13,10 +13,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
+use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Domain\Enums\ConnectionFailure;
 use Modules\Newsletter\Domain\Exceptions\NewsletterProviderException;
+use Modules\Newsletter\Infrastructure\Jobs\CheckNewsletterConnectionJob;
 use Modules\Newsletter\Infrastructure\Jobs\SubscribeToNewsletterJob;
 use Modules\Newsletter\Tests\Support\ConfiguresNewsletter;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -167,6 +170,58 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
         $log->shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []): bool => str_contains($message, 'could not be sent to the provider')
             && ($context['failure'] ?? null) === 'invalid_api_key'
             && ($context['subscriber_hash'] ?? null) === md5(mb_strtolower(self::EMAIL)))->once();
+    }
+
+    public function test_the_third_failure_in_a_row_asks_for_a_connection_check_and_the_first_two_do_not(): void
+    {
+        Queue::fake();
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 401], 401)]);
+
+        foreach ([1, 2] as $count) {
+            $this->runJob();
+            Queue::assertNotPushed(CheckNewsletterConnectionJob::class);
+            $this->assertSame($count, $this->counter()->current());
+        }
+
+        $this->runJob();
+
+        Queue::assertPushed(CheckNewsletterConnectionJob::class, 1);
+        // Asking is all it does: the newsletter stays on until a check fails
+        $this->assertTrue($this->app->make(NewsletterAvailabilityInterface::class)->isAvailable());
+    }
+
+    public function test_addresses_the_provider_rejects_also_ask_for_a_check_from_the_third(): void
+    {
+        Queue::fake();
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::sequence()
+            ->push(['status' => 404], 404)->push(['title' => 'Invalid Resource'], 400)
+            ->push(['status' => 404], 404)->push(['title' => 'Invalid Resource'], 400)
+            ->push(['status' => 404], 404)->push(['title' => 'Invalid Resource'], 400)]);
+
+        $this->runJob();
+        $this->runJob();
+        Queue::assertNotPushed(CheckNewsletterConnectionJob::class);
+        $this->runJob();
+
+        Queue::assertPushed(CheckNewsletterConnectionJob::class, 1);
+    }
+
+    public function test_many_failures_ask_for_one_check_every_fifteen_minutes_at_most(): void
+    {
+        Queue::fake();
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 401], 401)]);
+
+        for ($i = 0; $i < 8; $i++) {
+            $this->runJob();
+        }
+
+        Queue::assertPushed(CheckNewsletterConnectionJob::class, 1);
+    }
+
+    private function runJob(): void
+    {
+        $job = (new SubscribeToNewsletterJob(self::EMAIL))->withFakeQueueInteractions();
+        $job->handle($this->app->make(NewsletterProviderInterface::class), $this->counter());
     }
 
     /**

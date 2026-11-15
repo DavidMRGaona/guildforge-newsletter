@@ -51,6 +51,10 @@ return [
             'never_description' => 'El boletín no aparece en la web hasta que se guarden los ajustes con una conexión correcta.',
             'ok' => 'Conexión correcta (comprobada el :date)',
             'failed' => 'La última comprobación falló (:date)',
+            'ok_description' => 'La conexión se vuelve a comprobar cada día.',
+            'failed_hidden' => 'El boletín está oculto en la web mientras la conexión no funcione. Se vuelve a comprobar cada día y al guardar los ajustes.',
+            'refused_streak' => 'Mailchimp ha rechazado o fallado :count altas seguidas',
+            'refused_streak_description' => 'La conexión funciona, así que el boletín sigue visible. Revisa los campos obligatorios de la audiencia en Mailchimp.',
         ],
 
         'failures' => [
@@ -70,6 +74,29 @@ return [
             'saved_available' => 'La conexión funciona: el boletín ya puede aparecer en la web.',
             'saved_unavailable' => 'Ajustes guardados sin conexión',
             'hidden_until_connected' => 'El boletín no aparece en la web hasta que la conexión funcione.',
+        ],
+    ],
+
+    'provider_down' => [
+        'section' => 'Boletín',
+        'label' => 'Aviso de que Mailchimp ha dejado de funcionar',
+        'description' => 'Aviso, para quien configura el boletín, cuando Mailchimp deja de aceptar la clave o la lista y el boletín se oculta de la web.',
+        'notice' => 'El boletín está oculto: la conexión con Mailchimp ha fallado',
+        'mail' => [
+            'subject' => 'El boletín está oculto: la conexión con Mailchimp ha fallado',
+            'greeting' => 'Hola, :name',
+            'body' => 'La comprobación de la conexión con Mailchimp ha fallado y el boletín ya no aparece en la web.',
+            'hint' => 'Revisa la clave y la lista en los ajustes del boletín y guárdalos: si la conexión funciona, el boletín vuelve a aparecer. También se vuelve a comprobar cada día.',
+            'action' => 'Abrir los ajustes del boletín',
+        ],
+        'refused_sign_ups' => [
+            'notice' => 'Mailchimp rechaza las altas del boletín',
+            'reason' => 'Mailchimp rechaza las altas aunque la conexión funciona: revisa los campos obligatorios de la audiencia.',
+            'mail' => [
+                'subject' => 'Mailchimp rechaza las altas del boletín',
+                'body' => 'La conexión con Mailchimp funciona, pero ya van varias altas seguidas rechazadas. El boletín sigue visible en la web.',
+                'hint' => 'Suele pasar cuando la lista de Mailchimp tiene campos obligatorios (en la audiencia) que el formulario no pide. Revisa esos campos en Mailchimp y haz una alta de prueba.',
+            ],
         ],
     ],
 

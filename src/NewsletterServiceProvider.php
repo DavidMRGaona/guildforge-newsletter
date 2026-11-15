@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Newsletter;
 
+use App\Application\Authorization\Services\AuthorizationServiceInterface;
 use App\Application\Impersonation\Services\ImpersonationContextInterface;
+use App\Application\Mail\DTOs\MailCategoryDTO;
 use App\Application\Modules\DTOs\PagePrefixDTO;
 use App\Application\Modules\DTOs\PermissionDTO;
 use App\Application\Modules\DTOs\SlotRegistrationDTO;
@@ -12,11 +14,13 @@ use App\Domain\Events\RegistrationFieldsSubmitted;
 use App\Modules\ModuleServiceProvider;
 use Filament\Pages\Page;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
+use Modules\Newsletter\Application\Services\ConnectionHealthInterface;
 use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderFactoryInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
@@ -24,6 +28,7 @@ use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterfac
 use Modules\Newsletter\Application\Services\ProfileNewsletterServiceInterface;
 use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Application\Services\SubscriptionRequesterInterface;
+use Modules\Newsletter\Console\Commands\CheckConnectionCommand;
 use Modules\Newsletter\Filament\Pages\NewsletterSettingsPage;
 use Modules\Newsletter\Filament\SiteBlocks\SubscribeSiteBlock;
 use Modules\Newsletter\Infrastructure\Providers\ConfiguredNewsletterProvider;
@@ -31,6 +36,7 @@ use Modules\Newsletter\Infrastructure\Providers\NewsletterProviderFactory;
 use Modules\Newsletter\Infrastructure\Registration\SubscribeAfterRegistration;
 use Modules\Newsletter\Infrastructure\Registration\SubscribeOnRegistrationField;
 use Modules\Newsletter\Infrastructure\Services\CacheSubscribeFailureCounter;
+use Modules\Newsletter\Infrastructure\Services\ConnectionHealth;
 use Modules\Newsletter\Infrastructure\Services\NewsletterAvailability;
 use Modules\Newsletter\Infrastructure\Services\ProfileNewsletterService;
 use Modules\Newsletter\Infrastructure\Services\QueuedSubscriptionRequester;
@@ -45,6 +51,9 @@ use Symfony\Component\HttpFoundation\Response as HttpResponse;
  */
 final class NewsletterServiceProvider extends ModuleServiceProvider
 {
+    /** Mail and bell category of the notice that Mailchimp stopped working */
+    public const string MAIL_PROVIDER_DOWN = 'newsletter.provider-down';
+
     public function moduleName(): string
     {
         return 'newsletter';
@@ -62,6 +71,7 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         $this->app->scoped(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
         $this->app->bind(SubscriptionRequesterInterface::class, QueuedSubscriptionRequester::class);
         $this->app->bind(ProfileNewsletterServiceInterface::class, ProfileNewsletterService::class);
+        $this->app->bind(ConnectionHealthInterface::class, ConnectionHealth::class);
         // The default cache store, shared by every worker
         $this->app->bind(SubscribeFailureCounterInterface::class, static fn ($app): CacheSubscribeFailureCounter => new CacheSubscribeFailureCounter(
             $app->make(CacheFactory::class)->store(),
@@ -74,6 +84,7 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
 
         $this->registerRateLimiters();
         $this->shareProfileSection();
+        $this->registerConnectionCheck();
 
         // Queued and after the commit (core#699); the listener never runs inside the registration
         Event::listen(RegistrationFieldsSubmitted::class, SubscribeAfterRegistration::class);
@@ -141,6 +152,28 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
     }
 
     /**
+     * Only people who can configure the newsletter see the category in their profile. It is optional
+     * (mail and bell, each with its switch) and never a digest: an outage is not for tomorrow.
+     *
+     * @return list<MailCategoryDTO>
+     */
+    public function registerMailCategories(): array
+    {
+        return [
+            MailCategoryDTO::optional(
+                key: self::MAIL_PROVIDER_DOWN,
+                section: 'newsletter::messages.provider_down.section',
+                label: 'newsletter::messages.provider_down.label',
+                description: 'newsletter::messages.provider_down.description',
+                audience: static fn (object $user): bool => app(AuthorizationServiceInterface::class)
+                    ->can($user, NewsletterSettingsPage::PERMISSION),
+                icon: 'mail',
+                site: true,
+            ),
+        ];
+    }
+
+    /**
      * @return array<class-string<SubscribeSiteBlock>>
      */
     public function registerSiteBlocks(): array
@@ -191,6 +224,30 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         return [
             new PagePrefixDTO(prefix: 'Newsletter', module: $this->moduleName(), usesCoreLayout: true),
         ];
+    }
+
+    /**
+     * The daily check (and one every 30 minutes while it is off): Mailchimp may stop working with nobody subscribing (a revoked key, a deleted
+     * list). The failed subscriptions ask for another one sooner (ConnectionHealthInterface).
+     */
+    private function registerConnectionCheck(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([CheckConnectionCommand::class]);
+        }
+
+        $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+            // The scheduler runs in the display zone (app.schedule_timezone): early morning there
+            $schedule->command('newsletter:check-connection')
+                ->dailyAt('06:30')
+                ->withoutOverlapping(10);
+
+            // While the newsletter is off because of a failed check (or an unreachable provider
+            // awaits confirmation) it comes back as soon as Mailchimp does; otherwise it does nothing
+            $schedule->command('newsletter:check-connection --recheck')
+                ->everyThirtyMinutes()
+                ->withoutOverlapping(10);
+        });
     }
 
     /**

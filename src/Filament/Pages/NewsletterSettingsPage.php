@@ -27,10 +27,12 @@ use Modules\Newsletter\Application\DTOs\ConnectionCheckResultDTO;
 use Modules\Newsletter\Application\DTOs\NewsletterSettings;
 use Modules\Newsletter\Application\Services\NewsletterProviderFactoryInterface;
 use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterface;
+use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Domain\Enums\ConnectionFailure;
 use Modules\Newsletter\Domain\Enums\NewsletterProviderName;
 use Modules\Newsletter\Domain\ValueObjects\ConnectionCheck;
 use Modules\Newsletter\Domain\ValueObjects\MailchimpApiKey;
+use Modules\Newsletter\Infrastructure\Services\ConnectionHealth;
 use SensitiveParameter;
 
 /**
@@ -115,12 +117,17 @@ final class NewsletterSettingsPage extends Page implements HasForms
         return $schema
             ->components([
                 Callout::make(fn (): string => $this->lastCheckHeading())
-                    ->description(fn (): ?string => $this->lastCheckDescription())
+                    ->description(fn (): string => $this->lastCheckDescription())
                     ->status(fn (): string => match ($this->repository()->get()->lastCheck?->ok()) {
                         true => 'success',
                         false => 'danger',
                         null => 'warning',
                     }),
+
+                Callout::make(fn (): string => __('newsletter::messages.settings.last_check.refused_streak', ['count' => $this->refusedStreak()]))
+                    ->description(__('newsletter::messages.settings.last_check.refused_streak_description'))
+                    ->status('warning')
+                    ->visible(fn (): bool => $this->refusedStreak() >= ConnectionHealth::FAILURES_BEFORE_REJECTION_NOTICE),
 
                 Section::make(__('newsletter::messages.settings.connection'))
                     ->description(__('newsletter::messages.settings.connection_description'))
@@ -346,6 +353,14 @@ final class NewsletterSettingsPage extends Page implements HasForms
         return $this->repository()->get()->apiKey?->server();
     }
 
+    /**
+     * Failed sign-ups in a row (the count starts again when one goes through).
+     */
+    private function refusedStreak(): int
+    {
+        return app(SubscribeFailureCounterInterface::class)->current();
+    }
+
     private function lastCheckHeading(): string
     {
         $check = $this->repository()->get()->lastCheck;
@@ -361,7 +376,7 @@ final class NewsletterSettingsPage extends Page implements HasForms
             : __('newsletter::messages.settings.last_check.failed', ['date' => $when]);
     }
 
-    private function lastCheckDescription(): ?string
+    private function lastCheckDescription(): string
     {
         $check = $this->repository()->get()->lastCheck;
 
@@ -369,7 +384,12 @@ final class NewsletterSettingsPage extends Page implements HasForms
             return __('newsletter::messages.settings.last_check.never_description');
         }
 
-        return $check->ok() ? null : $this->failureText($check->failure);
+        if ($check->ok()) {
+            return __('newsletter::messages.settings.last_check.ok_description');
+        }
+
+        // Off because of the failed check: what failed, and when it comes back
+        return $this->failureText($check->failure).' '.__('newsletter::messages.settings.last_check.failed_hidden');
     }
 
     private function failureText(?ConnectionFailure $failure): string

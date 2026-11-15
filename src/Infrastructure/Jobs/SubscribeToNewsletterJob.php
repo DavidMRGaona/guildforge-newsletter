@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
+use Modules\Newsletter\Application\Services\ConnectionHealthInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Domain\Enums\ConnectionFailure;
@@ -61,8 +62,11 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
         return [30, 120, 600];
     }
 
-    public function handle(NewsletterProviderInterface $provider, SubscribeFailureCounterInterface $failures): void
+    public function handle(NewsletterProviderInterface $provider, SubscribeFailureCounterInterface $failures, ?ConnectionHealthInterface $health = null): void
     {
+        // The container passes it; a direct call may leave it out
+        $health ??= app(ConnectionHealthInterface::class);
+
         try {
             $outcome = $provider->subscribe($this->email, $this->name);
         } catch (Throwable $e) {
@@ -73,19 +77,26 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
                 throw $e;
             }
 
-            $this->giveUp($e, $failures);
+            $this->giveUp($e, $failures, $health);
 
             return;
         }
 
         match ($outcome) {
             // The only answer that writes to the list: the provider is working
-            SubscribeOutcome::ConfirmationRequested => $failures->reset(),
+            SubscribeOutcome::ConfirmationRequested => $this->working($failures, $health),
             // The provider refused the address itself: an answer, not a reason to try again
-            SubscribeOutcome::Rejected => $failures->recordFailure(),
+            SubscribeOutcome::Rejected => $health->checkAfterFailures($failures->recordFailure()),
             // Nothing was written (already on the list, bounced): says nothing about the provider
             SubscribeOutcome::AlreadyActive, SubscribeOutcome::NotReactivable => null,
         };
+    }
+
+    private function working(SubscribeFailureCounterInterface $failures, ConnectionHealthInterface $health): void
+    {
+        $failures->reset();
+        // A new streak of refused sign-ups may be told about again
+        $health->subscriptionsWorking();
     }
 
     /**
@@ -94,15 +105,15 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
      */
     public function failed(?Throwable $exception): void
     {
-        $this->giveUp($exception, app(SubscribeFailureCounterInterface::class));
+        $this->giveUp($exception, app(SubscribeFailureCounterInterface::class), app(ConnectionHealthInterface::class));
         $this->forgetFailedCopy();
     }
 
     /**
      * The subscription will not be tried again: log the hash (never the message: an exception may
-     * carry the address) and count the failure, unless nothing left the site.
+     * carry the address) and count the failure, unless nothing left the site. Failures in a row ask for a connection check.
      */
-    private function giveUp(?Throwable $exception, SubscribeFailureCounterInterface $failures): void
+    private function giveUp(?Throwable $exception, SubscribeFailureCounterInterface $failures, ConnectionHealthInterface $health): void
     {
         $failure = $exception instanceof NewsletterProviderException ? $exception->failure : null;
 
@@ -112,7 +123,8 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
         ]);
 
         if ($failure !== ConnectionFailure::Impersonation) {
-            $failures->recordFailure();
+            // From the third in a row this only asks for a connection check (limited in frequency)
+            $health->checkAfterFailures($failures->recordFailure());
         }
     }
 }
