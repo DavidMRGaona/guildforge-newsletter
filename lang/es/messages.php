@@ -100,4 +100,15 @@ return [
             'too_many_attempts' => 'Has hecho demasiados intentos. Espera unos minutos y vuelve a probar.',
         ],
     ],
+
+    'registration' => [
+        'label' => 'Quiero recibir el boletín',
+        'description' => 'Te enviaremos un correo para confirmar la suscripción. Puedes darte de baja cuando quieras.',
+    ],
+
+    'profile' => [
+        'errors' => [
+            'too_many_attempts' => 'Has hecho demasiados intentos. Espera unos minutos y vuelve a probar.',
+        ],
+    ],
 ];

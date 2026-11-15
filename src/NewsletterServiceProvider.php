@@ -4,26 +4,35 @@ declare(strict_types=1);
 
 namespace Modules\Newsletter;
 
+use App\Application\Impersonation\Services\ImpersonationContextInterface;
 use App\Application\Modules\DTOs\PagePrefixDTO;
 use App\Application\Modules\DTOs\PermissionDTO;
+use App\Application\Modules\DTOs\SlotRegistrationDTO;
+use App\Domain\Events\RegistrationFieldsSubmitted;
 use App\Modules\ModuleServiceProvider;
 use Filament\Pages\Page;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
+use Inertia\Inertia;
 use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderFactoryInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterface;
+use Modules\Newsletter\Application\Services\ProfileNewsletterServiceInterface;
 use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Application\Services\SubscriptionRequesterInterface;
 use Modules\Newsletter\Filament\Pages\NewsletterSettingsPage;
 use Modules\Newsletter\Filament\SiteBlocks\SubscribeSiteBlock;
 use Modules\Newsletter\Infrastructure\Providers\ConfiguredNewsletterProvider;
 use Modules\Newsletter\Infrastructure\Providers\NewsletterProviderFactory;
+use Modules\Newsletter\Infrastructure\Registration\SubscribeAfterRegistration;
+use Modules\Newsletter\Infrastructure\Registration\SubscribeOnRegistrationField;
 use Modules\Newsletter\Infrastructure\Services\CacheSubscribeFailureCounter;
 use Modules\Newsletter\Infrastructure\Services\NewsletterAvailability;
+use Modules\Newsletter\Infrastructure\Services\ProfileNewsletterService;
 use Modules\Newsletter\Infrastructure\Services\QueuedSubscriptionRequester;
 use Modules\Newsletter\Infrastructure\Settings\ModuleNewsletterSettingsRepository;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -52,6 +61,7 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         $this->app->bind(NewsletterProviderInterface::class, ConfiguredNewsletterProvider::class);
         $this->app->scoped(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
         $this->app->bind(SubscriptionRequesterInterface::class, QueuedSubscriptionRequester::class);
+        $this->app->bind(ProfileNewsletterServiceInterface::class, ProfileNewsletterService::class);
         // The default cache store, shared by every worker
         $this->app->bind(SubscribeFailureCounterInterface::class, static fn ($app): CacheSubscribeFailureCounter => new CacheSubscribeFailureCounter(
             $app->make(CacheFactory::class)->store(),
@@ -63,6 +73,66 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         parent::boot();
 
         $this->registerRateLimiters();
+        $this->shareProfileSection();
+
+        // Queued and after the commit (core#699); the listener never runs inside the registration
+        Event::listen(RegistrationFieldsSubmitted::class, SubscribeAfterRegistration::class);
+    }
+
+    /**
+     * @return array<class-string<SubscribeOnRegistrationField>>
+     */
+    public function registerRegistrationFields(): array
+    {
+        return [SubscribeOnRegistrationField::class];
+    }
+
+    /**
+     * The «Boletín» tab of the profile. The status is not part of the page: the section asks for it
+     * when it is opened, so the profile never waits for the provider.
+     *
+     * @return array<SlotRegistrationDTO>
+     */
+    public function registerSlots(): array
+    {
+        return [
+            new SlotRegistrationDTO(
+                slot: 'profile-sections',
+                component: 'components/profile/ProfileNewsletterSection.vue',
+                module: $this->moduleName(),
+                order: 60,
+                // visibleKey is read from the slot's props, so it is listed too
+                dataKeys: ['profileNewsletter', 'profileNewsletterVisible'],
+                profileTab: [
+                    'tabId' => 'newsletter',
+                    'icon' => 'envelope',
+                    'labelKey' => 'newsletter.profile.tabLabel',
+                    'visibleKey' => 'profileNewsletterVisible',
+                ],
+            ),
+        ];
+    }
+
+    /**
+     * What the profile page needs to show the tab: where to ask, and whether to show it at all.
+     * Both only on the profile, for a signed-in account, while the newsletter is available and
+     * nobody is impersonating (nothing is asked or written then).
+     */
+    private function shareProfileSection(): void
+    {
+        $visible = static function (): bool {
+            $request = request();
+
+            if ($request->route()?->getName() !== 'profile.show' || auth()->user() === null) {
+                return false;
+            }
+
+            return ! app(ImpersonationContextInterface::class)->isActive()
+                && app(NewsletterAvailabilityInterface::class)->isAvailable();
+        };
+
+        Inertia::share('profileNewsletterVisible', static fn (): ?bool => request()->route()?->getName() === 'profile.show' ? $visible() : null);
+        Inertia::share('profileNewsletter', static fn (): ?array => $visible() ? ['endpoint' => route('newsletter.profile', absolute: false)] : null);
     }
 
     /**
@@ -148,6 +218,22 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
                 Limit::perMinute(5)->by('newsletter-minute|'.$ip)->response($tooMany),
                 Limit::perHour(20)->by('newsletter-hour|'.$ip)->response($tooMany),
             ];
+        });
+
+        // The profile section, per account: reading is cheap and remembered, changing is not
+        RateLimiter::for('newsletter-profile', static function (Request $request): Limit {
+            if (! app(NewsletterAvailabilityInterface::class)->isAvailable()) {
+                return Limit::none();
+            }
+
+            $who = (string) ($request->user()?->getAuthIdentifier() ?? $request->ip() ?? 'unknown');
+            $tooMany = static fn (Request $request, array $headers): HttpResponse => response()->json([
+                'message' => (string) __('newsletter::messages.profile.errors.too_many_attempts'),
+            ], 429, $headers);
+
+            return $request->isMethodSafe()
+                ? Limit::perMinute(30)->by('newsletter-profile-read|'.$who)->response($tooMany)
+                : Limit::perMinute(6)->by('newsletter-profile-write|'.$who)->response($tooMany);
         });
     }
 }

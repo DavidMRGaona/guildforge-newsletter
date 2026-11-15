@@ -2,7 +2,7 @@
 
 Suscripción al boletín de la asociación desde la web, con una lista de Mailchimp.
 
-> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`). La salud del proveedor, el perfil y la casilla del registro llegan en las siguientes issues del hito.
+> Estado: conexión con Mailchimp, ajustes y formulario de suscripción (bloque del pie y de las ventanas emergentes, página `/newsletter`), sección «Boletín» del perfil y casilla del registro. La salud del proveedor llega en la siguiente issue del hito.
 
 La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp con doble confirmación, y las campañas se siguen preparando en Mailchimp.
 
@@ -64,6 +64,22 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 
 `SubscribeFailureCounterInterface` cuenta las altas fallidas seguidas, en la caché compartida por los workers: suma uno por cada trabajo que se rinde y por cada email que Mailchimp rechaza (`Rejected`), y solo vuelve a cero cuando Mailchimp escribe en la lista (`ConfirmationRequested`). Las respuestas que no escriben nada (ya suscrito o pendiente, rebotado) lo dejan como está, para que las altas repetidas de quien ya está en la lista no tapen un proveedor que rechaza a todos los nuevos. Es atómico sin bloqueo: `add()` crea la clave con caducidad solo si falta o ha caducado e `increment()` suma sin tocar la caducidad (con el store `database`, un insert y un update con la fila bloqueada); la racha caduca un día después de su primer fallo. Lo usará la comprobación de salud del proveedor; por ahora solo cuenta.
 
+## Perfil y registro
+
+**Sección «Boletín» del perfil** (pestaña en el hueco `profile-sections`). La página del perfil no consulta a Mailchimp: la sección pide el estado a `GET /perfil/boletin` al abrirse. El estado de cada cuenta se recuerda 5 minutos (clave con el hash del id de la cuenta y el hash del email, nunca el email) y los fallos del proveedor no se recuerdan. Según el estado:
+
+| Estado | La sección dice | Botón |
+|--------|-----------------|-------|
+| `subscribed` | Estás suscrito | Darme de baja |
+| `pending` | Te hemos enviado un correo para confirmar | — |
+| `unsubscribed` (también no encontrado o archivado) | No estás suscrito | Suscribirme |
+| `blocked` (dirección rebotada) | Esa dirección no puede recibir el boletín | — |
+| `unavailable` (el proveedor no responde) | No hemos podido consultar | Volver a probar |
+
+`POST` y `DELETE /perfil/boletin` usan siempre el email de la cuenta con la sesión iniciada, nunca uno de la petición, y solo actúan si el estado lo permite (no se encola un alta para una dirección rebotada ni una baja para quien no está en la lista). Ambos van en cola con trabajos cifrados (`SubscribeToNewsletterJob`, `UnsubscribeFromNewsletterJob`). Las rutas llevan `auth`, `email.verified-if-required` y `throttle:newsletter-profile` (30 lecturas o 6 cambios por minuto y cuenta) y no existen mientras el boletín no esté disponible. Durante una impersonación la pestaña se oculta y nada se consulta ni se escribe.
+
+**Casilla del registro** (`newsletter.subscribe`, contrato de campos del registro del core): «Quiero recibir el boletín», siempre desmarcada y solo disponible mientras lo esté el boletín. Si se marca, `SubscribeAfterRegistration` (en cola, `afterCommit`) lee la cuenta por su id, vuelve a comprobar la disponibilidad y pide el alta con `SubscriptionRequesterInterface`, que manda la confirmación de Mailchimp.
+
 ## Privacidad y seguridad
 
 - Los emails no se guardan en la web ni aparecen en los logs: en los errores solo va el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp (nunca su detalle, que suele repetir el email).
@@ -72,7 +88,7 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 
 ## Requisitos
 
-- GuildForge core `^3.75`
+- GuildForge core `^3.76`
 - PHP >= 8.5, Laravel >= 13, Filament 5
 
 El core rechaza el módulo si no se cumplen (`module.json` → `requires`).

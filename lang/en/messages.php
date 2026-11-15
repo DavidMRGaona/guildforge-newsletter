@@ -100,4 +100,15 @@ return [
             'too_many_attempts' => 'Too many attempts. Wait a few minutes and try again.',
         ],
     ],
+
+    'registration' => [
+        'label' => 'I want to receive the newsletter',
+        'description' => 'We will email you to confirm the subscription. You can unsubscribe whenever you like.',
+    ],
+
+    'profile' => [
+        'errors' => [
+            'too_many_attempts' => 'Too many attempts. Wait a few minutes and try again.',
+        ],
+    ],
 ];
