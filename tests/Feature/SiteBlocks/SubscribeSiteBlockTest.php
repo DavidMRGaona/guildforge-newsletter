@@ -31,17 +31,18 @@ final class SubscribeSiteBlockTest extends ModuleTestCase
         Http::preventStrayRequests();
     }
 
-    public function test_the_module_offers_the_block_for_the_footer_and_the_popups(): void
+    public function test_the_module_offers_the_block_for_the_footer_the_popups_and_the_link_page(): void
     {
         $registry = $this->app->make(SiteBlockRegistryInterface::class);
         $block = $registry->find('newsletter.subscribe');
 
         $this->assertInstanceOf(SubscribeSiteBlock::class, $block);
-        $this->assertSame([SiteBlockPlacement::Footer, SiteBlockPlacement::Popup], $block->placements());
+        $this->assertSame([SiteBlockPlacement::Footer, SiteBlockPlacement::Popup, SiteBlockPlacement::LinkPage], $block->placements());
         $this->assertSame('components/SubscribeBlock.vue', $block->component());
         $this->assertSame('Suscripción al boletín', $block->label());
         $this->assertContains($block, $registry->forPlacement(SiteBlockPlacement::Footer));
         $this->assertContains($block, $registry->forPlacement(SiteBlockPlacement::Popup));
+        $this->assertContains($block, $registry->forPlacement(SiteBlockPlacement::LinkPage));
     }
 
     public function test_its_settings_are_flat(): void
@@ -83,6 +84,7 @@ final class SubscribeSiteBlockTest extends ModuleTestCase
         return [
             'footer' => [SiteBlockPlacement::Footer],
             'popup' => [SiteBlockPlacement::Popup],
+            'link page' => [SiteBlockPlacement::LinkPage],
         ];
     }
 

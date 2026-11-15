@@ -13,8 +13,9 @@ use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Http\SubscribeFormProps;
 
 /**
- * The subscription form as a block of the footer or of a popup (core#696). Only drawn while the
- * newsletter is available; the consent text and the privacy link come from the module settings.
+ * The subscription form as a block of the footer, of a popup (core#696) or of the link page
+ * (core#755). Only drawn while the newsletter is available; the consent text and the privacy link
+ * come from the module settings.
  */
 final readonly class SubscribeSiteBlock implements SiteBlockInterface
 {
@@ -37,7 +38,7 @@ final readonly class SubscribeSiteBlock implements SiteBlockInterface
 
     public function placements(): array
     {
-        return [SiteBlockPlacement::Footer, SiteBlockPlacement::Popup];
+        return [SiteBlockPlacement::Footer, SiteBlockPlacement::Popup, SiteBlockPlacement::LinkPage];
     }
 
     public function settingsSchema(): array
