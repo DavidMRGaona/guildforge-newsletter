@@ -17,9 +17,11 @@ const props = withDefaults(
         SubscribeFormProps & {
             /** `dark` on the footer's background, `default` on the page's own surfaces */
             tone?: 'default' | 'dark';
+            /** Footer variant: a one-line email row, small consent text with the policy link inside it */
+            compact?: boolean;
         }
     >(),
-    { tone: 'default' }
+    { tone: 'default', compact: false }
 );
 
 const { t } = useI18n();
@@ -66,6 +68,20 @@ const linkClass = computed(() =>
         : 'font-medium text-primary-700 underline underline-offset-4 hover:text-primary-800 dark:text-primary-300 dark:hover:text-primary-200'
 );
 const errorClass = computed(() => (dark.value ? 'text-red-300' : 'text-error'));
+const checkboxClass = computed(() => [
+    'mt-0.5 h-4 w-4 shrink-0 rounded focus:ring-2 focus:ring-primary-500',
+    dark.value
+        ? 'border-neutral-500 bg-neutral-900 text-primary-600'
+        : 'border-neutral-400 text-primary-600',
+]);
+const consentTextClass = computed(() => [textClass.value, props.compact ? 'text-xs' : 'text-sm']);
+// In the compact form the grid puts the button next to the email from `sm`; the email sits in the row
+// after the intro, when there is one. Everything else takes the whole row.
+const formClass = computed(() =>
+    props.compact ? 'grid gap-x-2 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]' : 'space-y-4'
+);
+const full = computed(() => (props.compact ? 'sm:col-span-2' : ''));
+const emailRow = computed(() => (props.intro ? 'sm:row-start-2' : 'sm:row-start-1'));
 const inputClass = computed(() => [
     'block w-full rounded-md border px-3 py-2 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:cursor-not-allowed disabled:opacity-60',
     dark.value
@@ -164,14 +180,17 @@ async function submit(): Promise<void> {
             :action="action"
             method="post"
             novalidate
-            class="space-y-4"
+            :class="formClass"
             :aria-busy="sending ? 'true' : undefined"
             @submit.prevent="submit"
         >
-            <p v-if="intro" class="text-sm" :class="textClass">{{ intro }}</p>
+            <p v-if="intro" class="text-sm" :class="[textClass, full]">{{ intro }}</p>
 
-            <div>
-                <label :for="ids.email" class="mb-1 block text-sm font-medium" :class="labelClass">
+            <div :class="compact ? ['sm:col-start-1', emailRow] : undefined">
+                <label
+                    :for="ids.email"
+                    :class="compact ? 'sr-only' : ['mb-1 block text-sm font-medium', labelClass]"
+                >
                     {{ t('newsletter.subscribe.fields.email') }}
                     <span aria-hidden="true">*</span>
                 </label>
@@ -185,6 +204,7 @@ async function submit(): Promise<void> {
                     inputmode="email"
                     required
                     maxlength="254"
+                    :placeholder="compact ? t('newsletter.subscribe.fields.email') : undefined"
                     :disabled="sending"
                     :aria-invalid="errors.email ? 'true' : undefined"
                     :aria-describedby="describedBy('email', ids.emailError)"
@@ -200,7 +220,7 @@ async function submit(): Promise<void> {
                 </p>
             </div>
 
-            <div v-if="showName">
+            <div v-if="showName" :class="full">
                 <label :for="ids.name" class="mb-1 block text-sm font-medium" :class="labelClass">
                     {{ t('newsletter.subscribe.fields.name') }}
                     <span class="font-normal">({{ t('newsletter.subscribe.optional') }})</span>
@@ -236,8 +256,8 @@ async function submit(): Promise<void> {
                 />
             </div>
 
-            <div>
-                <div class="flex items-start gap-2">
+            <div :class="full">
+                <div v-if="compact" class="flex items-start gap-2">
                     <input
                         :id="ids.consent"
                         ref="consentInput"
@@ -248,14 +268,50 @@ async function submit(): Promise<void> {
                         :disabled="sending"
                         :aria-invalid="errors.consent ? 'true' : undefined"
                         :aria-describedby="describedBy('consent', ids.consentError)"
-                        class="mt-0.5 h-4 w-4 shrink-0 rounded border-neutral-400 text-primary-600 focus:ring-2 focus:ring-primary-500"
+                        :class="checkboxClass"
+                    />
+                    <p :class="consentTextClass" data-consent-text>
+                        <label :for="ids.consent">
+                            {{ consentText }}
+                            <span aria-hidden="true">*</span>
+                        </label>
+                        <template v-if="privacyUrl">
+                            <span aria-hidden="true"> · </span>
+                            <a
+                                v-if="privacyIsExternal"
+                                :href="privacyUrl"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                :class="linkClass"
+                            >
+                                {{ t('newsletter.subscribe.privacy') }}
+                                <span class="sr-only">{{ t('newsletter.subscribe.new_tab') }}</span>
+                            </a>
+                            <Link v-else :href="privacyUrl" :class="linkClass">
+                                {{ t('newsletter.subscribe.privacy') }}
+                            </Link>
+                        </template>
+                    </p>
+                </div>
+                <div v-else class="flex items-start gap-2">
+                    <input
+                        :id="ids.consent"
+                        ref="consentInput"
+                        v-model="fields.consent"
+                        type="checkbox"
+                        name="consent"
+                        required
+                        :disabled="sending"
+                        :aria-invalid="errors.consent ? 'true' : undefined"
+                        :aria-describedby="describedBy('consent', ids.consentError)"
+                        :class="checkboxClass"
                     />
                     <label :for="ids.consent" class="text-sm" :class="textClass">
                         {{ consentText }}
                         <span aria-hidden="true">*</span>
                     </label>
                 </div>
-                <p v-if="privacyUrl" class="mt-1 pl-6 text-sm" :class="textClass">
+                <p v-if="privacyUrl && !compact" class="mt-1 pl-6 text-sm" :class="textClass">
                     <a
                         v-if="privacyIsExternal"
                         :href="privacyUrl"
@@ -280,23 +336,37 @@ async function submit(): Promise<void> {
                 </p>
             </div>
 
-            <p v-if="blocked" :id="ids.gate" class="text-sm" :class="textClass">
+            <p v-if="blocked" :id="ids.gate" class="text-sm" :class="[textClass, full]">
                 {{ gate.reason('form') }}
                 <Link :href="gate.noticeUrl" :class="linkClass">
                     {{ gate.linkLabel.value }} <span aria-hidden="true">→</span>
                 </Link>
             </p>
 
-            <p v-if="failure" role="alert" class="text-sm" :class="errorClass">{{ failure }}</p>
+            <p v-if="failure" role="alert" class="text-sm" :class="[errorClass, full]">
+                {{ failure }}
+            </p>
 
-            <BaseButton
-                type="submit"
-                :loading="sending"
-                :disabled="blocked"
-                :aria-describedby="blocked ? ids.gate : undefined"
+            <div
+                :class="
+                    compact
+                        ? [
+                              'sm:col-start-2 sm:self-start [&>button]:w-full sm:[&>button]:w-auto',
+                              emailRow,
+                          ]
+                        : undefined
+                "
             >
-                {{ buttonText }}
-            </BaseButton>
+                <BaseButton
+                    type="submit"
+                    :size="compact ? 'sm' : 'md'"
+                    :loading="sending"
+                    :disabled="blocked"
+                    :aria-describedby="blocked ? ids.gate : undefined"
+                >
+                    {{ buttonText }}
+                </BaseButton>
+            </div>
 
             <p role="status" class="sr-only">
                 {{ sending ? t('newsletter.subscribe.sending') : '' }}

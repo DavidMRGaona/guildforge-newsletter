@@ -12,7 +12,7 @@ const props: SubscribeFormProps = {
     buttonLabel: null,
     showName: true,
     consentText: 'Quiero recibir el boletín.',
-    privacyUrl: null,
+    privacyUrl: '/privacidad',
     email: null,
     name: null,
 };
@@ -65,5 +65,67 @@ describe('SubscribeBlock', () => {
         });
 
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-surface');
+    });
+
+    describe('compact in the footer (newsletter#17)', () => {
+        it('puts the email label out of sight and uses a placeholder', () => {
+            const wrapper = mount(Harness, { props: { placement: 'footer' } });
+            const input = wrapper.get('input[type="email"]');
+            const label = wrapper.get(`label[for="${input.attributes('id')}"]`);
+
+            expect(label.classes()).toContain('sr-only');
+            expect(label.text()).toContain('Correo electrónico');
+            expect(input.attributes('placeholder')).toBe('Correo electrónico');
+        });
+
+        it('keeps the usual label and no placeholder in a popup', () => {
+            const wrapper = mount(Harness, { props: { placement: 'popup' } });
+            const input = wrapper.get('input[type="email"]');
+            const label = wrapper.get(`label[for="${input.attributes('id')}"]`);
+
+            expect(label.classes()).not.toContain('sr-only');
+            expect(input.attributes('placeholder')).toBeUndefined();
+        });
+
+        it('draws a dark checkbox with small text and the policy link inside the same sentence', () => {
+            const wrapper = mount(Harness, { props: { placement: 'footer' } });
+            const checkbox = wrapper.get('input[type="checkbox"]');
+            const text = wrapper.get('[data-consent-text]');
+
+            expect(checkbox.classes()).toEqual(
+                expect.arrayContaining(['border-neutral-500', 'bg-neutral-900'])
+            );
+            expect(text.classes()).toContain('text-xs');
+            expect(text.get('a').attributes('href')).toBe('/privacidad');
+            expect(text.text()).toContain('Quiero recibir el boletín.');
+        });
+
+        it('keeps the policy link on its own line in a popup', () => {
+            const wrapper = mount(Harness, { props: { placement: 'popup' } });
+
+            expect(wrapper.find('[data-consent-text]').exists()).toBe(false);
+            expect(wrapper.get('a[href="/privacidad"]').element.parentElement?.className).toContain(
+                'pl-6'
+            );
+            expect(wrapper.get('input[type="checkbox"]').classes()).not.toContain('bg-neutral-900');
+        });
+
+        it('lays the email and the button out in a row from sm', () => {
+            const wrapper = mount(Harness, { props: { placement: 'footer' } });
+
+            expect(wrapper.get('form').classes().join(' ')).toContain('sm:grid-cols-');
+            expect(wrapper.get('button[type="submit"]').element.parentElement?.className).toContain(
+                'sm:col-start-2'
+            );
+        });
+
+        it('uses the small button in the footer and the usual one elsewhere', () => {
+            const footer = mount(Harness, { props: { placement: 'footer' } });
+            const popup = mount(Harness, { props: { placement: 'popup' } });
+
+            expect(footer.get('button[type="submit"]').classes()).toContain('text-sm');
+            expect(footer.get('button[type="submit"]').classes()).not.toContain('text-base');
+            expect(popup.get('button[type="submit"]').classes()).toContain('text-base');
+        });
     });
 });

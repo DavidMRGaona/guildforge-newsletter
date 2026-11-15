@@ -7,18 +7,18 @@ import SubscribeForm from './SubscribeForm.vue';
 /**
  * Site block `newsletter.subscribe` (core#696), in the footer or inside a popup. The footer is dark in
  * both colour schemes and a popup follows the page, so the form takes its tone from the placement the
- * core says it is drawn in (core#718), never from the markup around it.
+ * core says it is drawn in (core#718), never from the markup around it. In the footer the form is also
+ * compact (newsletter#17): the form itself never reads the placement.
  */
 defineProps<SubscribeFormProps>();
 
 const placement = useSiteBlockPlacement();
-const tone = computed<'default' | 'dark'>(() =>
-    placement.value === 'footer' ? 'dark' : 'default'
-);
+const inFooter = computed(() => placement.value === 'footer');
+const tone = computed<'default' | 'dark'>(() => (inFooter.value ? 'dark' : 'default'));
 </script>
 
 <template>
     <div data-newsletter-subscribe>
-        <SubscribeForm v-bind="$props" :tone="tone" />
+        <SubscribeForm v-bind="$props" :tone="tone" :compact="inFooter" />
     </div>
 </template>
