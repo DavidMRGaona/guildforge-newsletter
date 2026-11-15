@@ -27,8 +27,11 @@ use Throwable;
  * The payload is encrypted (the queue is the database, and failed jobs keep their payload) and
  * carries only the address and the name: the provider, with its key, is resolved in handle(), so
  * the key is never serialized. A failure the retries cannot fix (key refused, list gone, nothing
- * configured) fails at once; the rest is tried again with waits. A job that fails for good logs
- * only the subscriber hash and leaves no copy in failed_jobs.
+ * configured) gives up at once; the rest is tried again with waits. Giving up happens inside
+ * handle(), which logs only the subscriber hash, counts the failure and returns, so the worker
+ * never sees a failed job and never writes it to failed_jobs. failed() stays as a safety net for
+ * what handle() cannot catch (a timeout, a worker killed mid-job): it does the same and removes the
+ * copy the worker writes.
  */
 final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
 {
@@ -63,48 +66,59 @@ final class SubscribeToNewsletterJob implements ShouldBeEncrypted, ShouldQueue
     {
         try {
             $outcome = $provider->subscribe($this->email, $this->name);
-        } catch (NewsletterProviderException $e) {
-            if (in_array($e->failure, self::PERMANENT, true)) {
-                $this->fail($e);
+        } catch (Throwable $e) {
+            $permanent = $e instanceof NewsletterProviderException && in_array($e->failure, self::PERMANENT, true);
 
-                return;
+            if (! $permanent && $this->attempts() < $this->tries) {
+                // The worker tries again after the next wait
+                throw $e;
             }
 
-            throw $e;
-        }
-
-        // The provider refused the address itself: an answer, not a reason to try again
-        if ($outcome === SubscribeOutcome::Rejected) {
-            $failures->recordFailure();
+            $this->giveUp($e, $failures);
 
             return;
         }
 
-        $failures->reset();
+        match ($outcome) {
+            // The only answer that writes to the list: the provider is working
+            SubscribeOutcome::ConfirmationRequested => $failures->reset(),
+            // The provider refused the address itself: an answer, not a reason to try again
+            SubscribeOutcome::Rejected => $failures->recordFailure(),
+            // Nothing was written (already on the list, bounced): says nothing about the provider
+            SubscribeOutcome::AlreadyActive, SubscribeOutcome::NotReactivable => null,
+        };
     }
 
     /**
-     * Called once the job will not be tried again.
+     * Safety net: the worker calls it only for what handle() could not catch (a timeout, too many
+     * attempts after a worker was killed).
      */
     public function failed(?Throwable $exception): void
     {
+        $this->giveUp($exception, app(SubscribeFailureCounterInterface::class));
+        $this->forgetFailedCopy();
+    }
+
+    /**
+     * The subscription will not be tried again: log the hash (never the message: an exception may
+     * carry the address) and count the failure, unless nothing left the site.
+     */
+    private function giveUp(?Throwable $exception, SubscribeFailureCounterInterface $failures): void
+    {
         $failure = $exception instanceof NewsletterProviderException ? $exception->failure : null;
 
-        // Never the message: another exception may carry the address
         Log::warning('Newsletter: a subscription could not be sent to the provider', [
             'subscriber_hash' => SubscriberHash::fromEmail($this->email)->value(),
             'failure' => $failure->value ?? ($exception instanceof Throwable ? $exception::class : 'unknown'),
         ]);
 
         if ($failure !== ConnectionFailure::Impersonation) {
-            app(SubscribeFailureCounterInterface::class)->recordFailure();
+            $failures->recordFailure();
         }
-
-        $this->forgetFailedCopy();
     }
 
     /**
-     * The worker writes the failed job to failed_jobs after this method returns (when it hears
+     * The worker writes the failed job to failed_jobs after failed() returns (when it hears
      * JobFailed), so the copy is deleted from a listener that runs after the worker's own.
      */
     private function forgetFailedCopy(): void

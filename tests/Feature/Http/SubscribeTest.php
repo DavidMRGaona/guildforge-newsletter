@@ -137,22 +137,65 @@ final class SubscribeTest extends ModuleTestCase
             ->assertJsonValidationErrors(['consent' => 'Marca la casilla para aceptar recibir el boletín.']);
     }
 
-    public function test_a_filled_trap_field_gets_the_same_answer_and_nothing_is_queued(): void
+    /**
+     * @param  array<string, mixed>  $changes
+     */
+    #[DataProvider('trappedForms')]
+    public function test_anything_in_the_trap_field_gets_the_same_answer_and_nothing_is_queued(array $changes): void
     {
-        $this->postJson('/newsletter', $this->form(['website' => 'https://spam.example']))
+        $this->postJson('/newsletter', $this->form($changes))
             ->assertOk()
             ->assertExactJson(['message' => self::CHECK_YOUR_EMAIL]);
 
         Queue::assertNothingPushed();
     }
 
-    public function test_nothing_is_queued_while_the_newsletter_is_not_available(): void
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function trappedForms(): array
+    {
+        return [
+            'a link' => [['website' => 'https://spam.example']],
+            'a long text' => [['website' => str_repeat('a', 5000)]],
+            'a list' => [['website' => ['spam', 'more spam']]],
+            'a number' => [['website' => 0]],
+            'with the rest invalid too' => [['website' => 'x', 'email' => 'not-an-address', 'consent' => false]],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $changes
+     */
+    #[DataProvider('anyForm')]
+    public function test_while_the_newsletter_is_not_available_every_request_gets_the_same_404(array $changes): void
     {
         $this->configureNewsletter(lastCheckOk: false);
 
-        $this->postJson('/newsletter', $this->form())->assertNotFound();
+        $this->postJson('/newsletter', $this->form($changes))->assertNotFound();
 
         Queue::assertNothingPushed();
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function anyForm(): array
+    {
+        return [
+            'valid' => [[]],
+            'invalid' => [['email' => '', 'consent' => false]],
+            'trapped' => [['website' => 'https://spam.example']],
+        ];
+    }
+
+    public function test_the_limit_never_answers_before_the_404(): void
+    {
+        $this->configureNewsletter(lastCheckOk: false);
+
+        foreach (range(1, 7) as $attempt) {
+            $this->postJson('/newsletter', $this->form())->assertNotFound();
+        }
     }
 
     public function test_nothing_is_queued_during_an_impersonation_and_the_answer_is_the_same(): void

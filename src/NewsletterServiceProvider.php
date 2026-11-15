@@ -125,7 +125,13 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
      */
     private function registerRateLimiters(): void
     {
-        RateLimiter::for('newsletter-subscribe', static function (Request $request): array {
+        RateLimiter::for('newsletter-subscribe', static function (Request $request): Limit|array {
+            // Laravel runs the limit before the route's other middleware: while the newsletter is
+            // not available, let EnsureNewsletterIsAvailable answer the same 404 to everyone
+            if (! app(NewsletterAvailabilityInterface::class)->isAvailable()) {
+                return Limit::none();
+            }
+
             $ip = $request->ip() ?? 'unknown';
             $tooMany = static function (Request $request, array $headers): HttpResponse {
                 $message = (string) __('newsletter::messages.subscribe.errors.too_many_attempts');

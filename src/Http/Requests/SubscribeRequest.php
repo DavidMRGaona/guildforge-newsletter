@@ -8,8 +8,8 @@ use Illuminate\Foundation\Http\FormRequest;
 use Modules\Newsletter\Http\SubscribeFormProps;
 
 /**
- * The subscription form. `website` is a trap field people never see: whoever fills it in is
- * answered as everybody else and nothing is sent.
+ * The subscription form. `website` is a trap field people never see: whoever sends anything in it
+ * (text, a list…) is answered as everybody else, nothing is validated and nothing is sent.
  */
 final class SubscribeRequest extends FormRequest
 {
@@ -29,7 +29,6 @@ final class SubscribeRequest extends FormRequest
             'email' => ['required', 'string', 'email:rfc', 'max:254'],
             'name' => ['nullable', 'string', 'max:'.SubscribeFormProps::NAME_MAX_LENGTH],
             'consent' => ['accepted'],
-            self::TRAP_FIELD => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -54,9 +53,21 @@ final class SubscribeRequest extends FormRequest
         ];
     }
 
+    /**
+     * A trapped request is not validated: the controller answers it like any other.
+     */
+    public function validateResolved(): void
+    {
+        if ($this->isTrapped()) {
+            return;
+        }
+
+        parent::validateResolved();
+    }
+
     public function isTrapped(): bool
     {
-        return trim((string) $this->input(self::TRAP_FIELD, '')) !== '';
+        return $this->filled(self::TRAP_FIELD);
     }
 
     public function subscriberEmail(): string

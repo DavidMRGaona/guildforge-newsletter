@@ -15,10 +15,16 @@ const props: SubscribeFormProps = {
     name: null,
 };
 
-function inside(tag: 'footer' | 'div'): Component {
+function inside(markup: 'footer-column' | 'popup-with-footer'): Component {
     return defineComponent({
         setup() {
-            return (): VNode => h(tag, [h(SubscribeBlock, props)]);
+            return (): VNode =>
+                markup === 'footer-column'
+                    ? h('footer', [
+                          h('div', { 'data-footer-column': '' }, [h(SubscribeBlock, props)]),
+                      ])
+                    : // A popup whose own content has a <footer>: not the site footer
+                      h('div', { role: 'dialog' }, [h('footer', [h(SubscribeBlock, props)])]);
         },
     });
 }
@@ -31,16 +37,17 @@ describe('SubscribeBlock', () => {
         expect(wrapper.find('form[action="/newsletter"]').exists()).toBe(true);
     });
 
-    it('is dark in the footer', async () => {
-        const wrapper = mount(inside('footer'), { attachTo: document.body });
+    it('is dark in a column of the site footer', async () => {
+        const wrapper = mount(inside('footer-column'), { attachTo: document.body });
         // The tone is read once the block is in the page
         await nextTick();
 
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-neutral-900');
     });
 
-    it('follows the page anywhere else, such as a popup', () => {
-        const wrapper = mount(inside('div'), { attachTo: document.body });
+    it('follows the page anywhere else, even inside some other <footer>', async () => {
+        const wrapper = mount(inside('popup-with-footer'), { attachTo: document.body });
+        await nextTick();
 
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-surface');
     });

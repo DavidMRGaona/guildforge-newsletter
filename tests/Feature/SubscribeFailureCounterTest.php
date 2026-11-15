@@ -8,6 +8,7 @@ use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
 use Modules\Newsletter\Infrastructure\Services\CacheSubscribeFailureCounter;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Support\Modules\ModuleTestCase;
 
@@ -43,6 +44,48 @@ final class SubscribeFailureCounterTest extends ModuleTestCase
         $other = new CacheSubscribeFailureCounter(Cache::store());
 
         $this->assertSame(2, $other->recordFailure());
+    }
+
+    #[DataProvider('stores')]
+    public function test_a_streak_expires_a_day_after_its_first_failure(string $store): void
+    {
+        $counter = new CacheSubscribeFailureCounter(Cache::store($store));
+
+        $counter->recordFailure();
+        $this->travel(CacheSubscribeFailureCounter::TTL_SECONDS - 60)->seconds();
+        // Adding to the streak keeps the expiry of its first failure
+        $this->assertSame(2, $counter->recordFailure());
+
+        $this->travel(120)->seconds();
+
+        $this->assertSame(0, $counter->current());
+        $this->assertSame(1, $counter->recordFailure());
+        $this->assertSame(2, $counter->recordFailure());
+
+        // The new streak has its own expiry
+        $this->travel(CacheSubscribeFailureCounter::TTL_SECONDS + 1)->seconds();
+        $this->assertSame(0, $counter->current());
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function stores(): array
+    {
+        return [
+            'database (the default store here)' => ['database'],
+            'array' => ['array'],
+        ];
+    }
+
+    public function test_a_key_that_expired_between_add_and_increment_starts_again_with_an_expiry(): void
+    {
+        $cache = $this->createMock(Repository::class);
+        $cache->method('add')->willReturn(false);
+        $cache->method('increment')->willReturn(false);
+        $cache->expects($this->once())->method('put')->with(CacheSubscribeFailureCounter::KEY, 1, CacheSubscribeFailureCounter::TTL_SECONDS);
+
+        $this->assertSame(1, (new CacheSubscribeFailureCounter($cache))->recordFailure());
     }
 
     public function test_a_cache_that_fails_never_breaks_a_subscription(): void

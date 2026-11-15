@@ -7,8 +7,10 @@ namespace Modules\Newsletter\Tests\Feature\Jobs;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Http\Client\Request;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
@@ -30,6 +32,9 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
     protected ?string $moduleName = 'newsletter';
 
     protected bool $autoEnableModule = true;
+
+    /** JobFailed events the worker raised during the test */
+    private int $failedJobEvents = 0;
 
     protected function setUp(): void
     {
@@ -90,21 +95,23 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
         $this->assertSame(0, $this->counter()->current());
     }
 
-    #[DataProvider('answersThatAreNotFailures')]
-    public function test_an_answer_the_provider_gives_on_purpose_is_not_a_failure(string $status): void
+    #[DataProvider('answersThatWriteNothing')]
+    public function test_an_answer_that_writes_nothing_leaves_the_failure_count_as_it_is(string $status): void
     {
+        $this->counter()->recordFailure();
         $this->counter()->recordFailure();
         Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => $status], 200)]);
 
         dispatch_sync(new SubscribeToNewsletterJob(self::EMAIL));
 
-        $this->assertSame(0, $this->counter()->current());
+        // People already on the list joining again must not hide a provider that refuses new ones
+        $this->assertSame(2, $this->counter()->current());
     }
 
     /**
      * @return array<string, array{string}>
      */
-    public static function answersThatAreNotFailures(): array
+    public static function answersThatWriteNothing(): array
     {
         return [
             'already subscribed' => ['subscribed'],
@@ -146,14 +153,20 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
     }
 
     #[DataProvider('failuresRetriesCannotFix')]
-    public function test_a_failure_retries_cannot_fix_fails_the_job_at_once(int $status): void
+    public function test_a_failure_retries_cannot_fix_gives_up_at_once_without_failing_the_job(int $status): void
     {
+        $log = Log::spy();
         Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => $status], $status)]);
         $job = (new SubscribeToNewsletterJob(self::EMAIL))->withFakeQueueInteractions();
 
         $job->handle($this->app->make(NewsletterProviderInterface::class), $this->counter());
 
-        $job->assertFailed();
+        $job->assertNotFailed();
+        $job->assertNotReleased();
+        $this->assertSame(1, $this->counter()->current());
+        $log->shouldHaveReceived('warning')->withArgs(fn (string $message, array $context = []): bool => str_contains($message, 'could not be sent to the provider')
+            && ($context['failure'] ?? null) === 'invalid_api_key'
+            && ($context['subscriber_hash'] ?? null) === md5(mb_strtolower(self::EMAIL)))->once();
     }
 
     /**
@@ -196,10 +209,11 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
             && ! str_contains(mb_strtolower(json_encode($context) ?: ''), 'ana.example'));
     }
 
-    public function test_after_the_last_retry_the_worker_keeps_no_copy_of_the_job(): void
+    public function test_after_the_last_retry_the_job_gives_up_without_the_worker_seeing_a_failure(): void
     {
         config(['queue.default' => 'database']);
         Log::spy();
+        $this->listenForFailedJobs();
         Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 503], 503)]);
 
         dispatch(new SubscribeToNewsletterJob(self::EMAIL, 'Anabel Secreta'));
@@ -207,12 +221,59 @@ final class SubscribeToNewsletterJobTest extends ModuleTestCase
         // Four attempts, waiting out each backoff in between
         foreach ([0, 31, 121, 601] as $wait) {
             $this->travel($wait)->seconds();
-            Artisan::call('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0]);
+            $this->work();
         }
 
+        $this->assertSame(0, $this->failedJobEvents);
         $this->assertSame(0, DB::table('jobs')->count());
         $this->assertSame(0, DB::table('failed_jobs')->count());
         $this->assertSame(1, $this->counter()->current());
+    }
+
+    public function test_a_refused_key_gives_up_on_the_first_attempt_without_the_worker_seeing_a_failure(): void
+    {
+        config(['queue.default' => 'database']);
+        Log::spy();
+        $this->listenForFailedJobs();
+        Http::fake([$this->memberUrl(self::EMAIL) => Http::response(['status' => 401], 401)]);
+
+        dispatch(new SubscribeToNewsletterJob(self::EMAIL));
+        $this->work();
+
+        $this->assertSame(0, $this->failedJobEvents);
+        $this->assertSame(0, DB::table('jobs')->count());
+        $this->assertSame(0, DB::table('failed_jobs')->count());
+        $this->assertSame(1, $this->counter()->current());
+        Http::assertSentCount(1);
+    }
+
+    public function test_a_job_the_worker_fails_without_running_it_leaves_no_copy_either(): void
+    {
+        config(['queue.default' => 'database']);
+        Log::spy();
+        Http::fake();
+
+        // As if a worker had been killed in the middle of every attempt: the next one is over the limit
+        dispatch(new SubscribeToNewsletterJob(self::EMAIL, 'Anabel Secreta'));
+        DB::table('jobs')->update(['attempts' => 4]);
+        $this->work();
+
+        Http::assertNothingSent();
+        $this->assertSame(0, DB::table('jobs')->count());
+        $this->assertSame(0, DB::table('failed_jobs')->count());
+        $this->assertSame(1, $this->counter()->current());
+    }
+
+    private function work(): void
+    {
+        Artisan::call('queue:work', ['connection' => 'database', '--once' => true, '--sleep' => 0]);
+    }
+
+    private function listenForFailedJobs(): void
+    {
+        Event::listen(JobFailed::class, function (): void {
+            $this->failedJobEvents++;
+        });
     }
 
     private function counter(): SubscribeFailureCounterInterface

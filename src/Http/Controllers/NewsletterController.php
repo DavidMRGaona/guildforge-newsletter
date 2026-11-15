@@ -11,28 +11,25 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\SubscriptionRequesterInterface;
 use Modules\Newsletter\Http\Requests\SubscribeRequest;
 use Modules\Newsletter\Http\SubscribeFormProps;
 
 /**
  * The /newsletter page and the form that every surface sends. Neither exists while the newsletter
- * is not available. The answer is always «check your email»: it never says whether the address
- * was already on the list, and the provider is asked in the background.
+ * is not available (EnsureNewsletterIsAvailable, on the routes). The answer is always «check your
+ * email»: it never says whether the address was already on the list, and the provider is asked in
+ * the background.
  */
 final readonly class NewsletterController
 {
     public function __construct(
-        private NewsletterAvailabilityInterface $availability,
         private SubscribeFormProps $form,
         private SeoMetadataFactoryInterface $seo,
     ) {}
 
     public function show(Request $request): Response
     {
-        abort_unless($this->availability->isAvailable(), 404);
-
         return Inertia::render('Newsletter/Subscribe', [
             'form' => $this->form->for($request->user()),
             'seo' => $this->seo->forPage(new SeoPageDTO(
@@ -44,8 +41,6 @@ final readonly class NewsletterController
 
     public function store(SubscribeRequest $request, SubscriptionRequesterInterface $subscriptions): JsonResponse|RedirectResponse
     {
-        abort_unless($this->availability->isAvailable(), 404);
-
         if (! $request->isTrapped()) {
             $subscriptions->request($request->subscriberEmail(), $request->subscriberName());
         }
