@@ -17,7 +17,7 @@ El boletín de {{site_name}} te cuenta las novedades por correo. Te apuntas tú,
 
 Puedes hacerlo desde varios sitios, y es lo mismo en todos:
 
-- el formulario del **pie de la página** o de una ventana emergente, si {{site_name}} lo ha puesto;
+- el formulario del **pie de la página**, de una ventana emergente o de la página de enlaces, si {{site_name}} lo ha puesto;
 - la página **Boletín**;
 - la sección **Boletín** de tu perfil;
 - la casilla **Quiero recibir el boletín** al crear tu cuenta.

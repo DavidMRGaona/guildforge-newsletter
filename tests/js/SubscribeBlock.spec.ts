@@ -59,6 +59,15 @@ describe('SubscribeBlock', () => {
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-surface');
     });
 
+    it('follows the page on the link page, with the whole form', () => {
+        const wrapper = mount(Harness, { props: { placement: 'link_page' } });
+        const input = wrapper.get('input[type="email"]');
+        const label = wrapper.get(`label[for="${input.attributes('id')}"]`);
+
+        expect(input.classes()).toContain('bg-surface');
+        expect(label.classes()).not.toContain('sr-only');
+    });
+
     it('does not look at the markup around it', () => {
         const wrapper = mount(Harness, {
             props: { placement: 'popup', wrapped: true },
