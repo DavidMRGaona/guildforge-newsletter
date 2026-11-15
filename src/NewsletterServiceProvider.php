@@ -8,15 +8,25 @@ use App\Application\Modules\DTOs\PagePrefixDTO;
 use App\Application\Modules\DTOs\PermissionDTO;
 use App\Modules\ModuleServiceProvider;
 use Filament\Pages\Page;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Cache\Factory as CacheFactory;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Modules\Newsletter\Application\Services\NewsletterAvailabilityInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderFactoryInterface;
 use Modules\Newsletter\Application\Services\NewsletterProviderInterface;
 use Modules\Newsletter\Application\Services\NewsletterSettingsRepositoryInterface;
+use Modules\Newsletter\Application\Services\SubscribeFailureCounterInterface;
+use Modules\Newsletter\Application\Services\SubscriptionRequesterInterface;
 use Modules\Newsletter\Filament\Pages\NewsletterSettingsPage;
+use Modules\Newsletter\Filament\SiteBlocks\SubscribeSiteBlock;
 use Modules\Newsletter\Infrastructure\Providers\ConfiguredNewsletterProvider;
 use Modules\Newsletter\Infrastructure\Providers\NewsletterProviderFactory;
+use Modules\Newsletter\Infrastructure\Services\CacheSubscribeFailureCounter;
 use Modules\Newsletter\Infrastructure\Services\NewsletterAvailability;
+use Modules\Newsletter\Infrastructure\Services\QueuedSubscriptionRequester;
 use Modules\Newsletter\Infrastructure\Settings\ModuleNewsletterSettingsRepository;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 /**
  * Newsletter of the association: subscription to a Mailchimp list from the web.
@@ -41,6 +51,26 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         // Asks the repository on every call, so a long-running worker never keeps an old key
         $this->app->bind(NewsletterProviderInterface::class, ConfiguredNewsletterProvider::class);
         $this->app->scoped(NewsletterAvailabilityInterface::class, NewsletterAvailability::class);
+        $this->app->bind(SubscriptionRequesterInterface::class, QueuedSubscriptionRequester::class);
+        // The default cache store, shared by every worker
+        $this->app->bind(SubscribeFailureCounterInterface::class, static fn ($app): CacheSubscribeFailureCounter => new CacheSubscribeFailureCounter(
+            $app->make(CacheFactory::class)->store(),
+        ));
+    }
+
+    public function boot(): void
+    {
+        parent::boot();
+
+        $this->registerRateLimiters();
+    }
+
+    /**
+     * @return array<class-string<SubscribeSiteBlock>>
+     */
+    public function registerSiteBlocks(): array
+    {
+        return [SubscribeSiteBlock::class];
     }
 
     public function getSettingsPage(): string
@@ -86,5 +116,38 @@ final class NewsletterServiceProvider extends ModuleServiceProvider
         return [
             new PagePrefixDTO(prefix: 'Newsletter', module: $this->moduleName(), usesCoreLayout: true),
         ];
+    }
+
+    /**
+     * Subscriptions per IP: enough for a household sharing a connection, too few to fill the list
+     * with made-up addresses or to flood someone's inbox with confirmations. Over the limit, a
+     * translated message, never an error page.
+     */
+    private function registerRateLimiters(): void
+    {
+        RateLimiter::for('newsletter-subscribe', static function (Request $request): Limit|array {
+            // Laravel runs the limit before the route's other middleware: while the newsletter is
+            // not available, let EnsureNewsletterIsAvailable answer the same 404 to everyone
+            if (! app(NewsletterAvailabilityInterface::class)->isAvailable()) {
+                return Limit::none();
+            }
+
+            $ip = $request->ip() ?? 'unknown';
+            $tooMany = static function (Request $request, array $headers): HttpResponse {
+                $message = (string) __('newsletter::messages.subscribe.errors.too_many_attempts');
+
+                if ($request->header('X-Inertia') === null && $request->expectsJson()) {
+                    return response()->json(['message' => $message], 429, $headers);
+                }
+
+                return back()->withErrors(['email' => $message]);
+            };
+
+            // Distinct keys: limits sharing a key would share one counter
+            return [
+                Limit::perMinute(5)->by('newsletter-minute|'.$ip)->response($tooMany),
+                Limit::perHour(20)->by('newsletter-hour|'.$ip)->response($tooMany),
+            ];
+        });
     }
 }
