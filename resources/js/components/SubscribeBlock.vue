@@ -12,7 +12,9 @@ import SubscribeForm from './SubscribeForm.vue';
 defineProps<SubscribeFormProps>();
 
 const placement = useSiteBlockPlacement();
-const tone = computed<'default' | 'dark'>(() => (placement.value === 'footer' ? 'dark' : 'default'));
+const tone = computed<'default' | 'dark'>(() =>
+    placement.value === 'footer' ? 'dark' : 'default'
+);
 </script>
 
 <template>
