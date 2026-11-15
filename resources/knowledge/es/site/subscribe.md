@@ -74,5 +74,4 @@ Siempre se usa el correo de tu cuenta, nunca otro.
 ## Si algo no sale bien
 
 - **Pone «Has hecho demasiados intentos»**: espera unos minutos y vuelve a probar.
-- **No veo el boletín ni la sección en mi perfil**: puede estar apagado temporalmente porque el servicio de correo no responde. Se restablece solo.
 - **No me llega el correo de confirmación**: revisa que escribiste bien la dirección y mira el spam. Si ya estabas suscrito o pendiente, no se vuelve a enviar y la web no te lo dice.

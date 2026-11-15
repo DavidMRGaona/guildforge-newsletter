@@ -13,7 +13,7 @@ conditions:
 ---
 La web no guarda suscriptores. Cada alta va a una lista (llamada **audiencia** en Mailchimp), que manda el correo de confirmación. Las campañas se siguen preparando y enviando desde Mailchimp. Aquí solo conectas la web con tu lista.
 
-Hace falta el permiso **Configurar el boletín**, que un administrador da a mano en el editor de roles (ningún rol lo tiene por defecto).
+Hace falta el permiso **Configurar el boletín**, que se da a mano en el editor de roles (ningún rol lo tiene por defecto).
 
 ## Qué necesitas de Mailchimp
 
@@ -59,7 +59,7 @@ Qué hace la web cuando algo va mal:
 
 - **Se oculta el boletín.** Cuando una comprobación falla, desaparecen el bloque, la página, la sección del perfil y la casilla del registro. Si Mailchimp solo tarda en responder, no se oculta a la primera: hacen falta dos respuestas fallidas seguidas, separadas al menos diez minutos. Una clave rechazada o una lista que ya no existe lo ocultan a la primera.
 - **Se avisa a quien configura el boletín**, una sola vez por caída, por la campana y por correo según las preferencias de cada persona (el aviso se llama «Aviso de que Mailchimp ha dejado de funcionar»).
-- **Vuelve solo.** La web comprueba la conexión cada día y, mientras el boletín está oculto, cada 30 minutos. En cuanto Mailchimp responde bien, el boletín reaparece sin que hagas nada. También puedes arreglar la clave o la lista y guardar los ajustes: si la conexión funciona, vuelve al momento.
+- **Vuelve solo.** La web comprueba la conexión cada día y, mientras el boletín está oculto, cada 30 minutos. En cuanto Mailchimp responde bien, el boletín reaparece sin que hagas nada. También puedes arreglar la clave o la lista y guardar los ajustes: si la conexión funciona, vuelve al momento. Al revés, si guardas mientras Mailchimp no responde, el boletín se oculta al momento: el guardado no espera confirmación.
 - **Tres altas fallidas seguidas** piden una comprobación extra, pero nunca ocultan el boletín por sí solas.
 
 > [!TIP]
@@ -72,7 +72,7 @@ Si la conexión funciona pero llegan varias altas seguidas rechazadas, la págin
 Casi siempre es que la audiencia tiene campos obligatorios que el formulario no pide. Para arreglarlo:
 
 1. En Mailchimp, abre la audiencia y revisa sus campos. Quita la obligatoriedad de los que no sean el correo.
-2. Haz un alta de prueba desde la web con una dirección tuya.
+2. Haz un alta de prueba desde la web con una dirección tuya que no esté ya en la lista: una ya suscrita o pendiente no cuenta como alta y no reinicia el aviso.
 3. Cuando una sale bien, el aviso desaparece.
 
 ## Si algo no sale bien

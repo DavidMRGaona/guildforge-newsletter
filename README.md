@@ -77,7 +77,7 @@ El módulo define un único permiso, `newsletter.configure` («Configurar el bol
 |---|---|
 | `newsletter:check-connection` | Comprueba que Mailchimp acepta la clave y la lista guardadas. El planificador lo lanza cada día a las 06:30 (zona de visualización). Sale con error si la comprobación falla o no puede ejecutarse |
 | `newsletter:check-connection --recheck` | Solo comprueba si la última comprobación falló o hay una respuesta sin confirmar. El planificador lo lanza cada 30 minutos, y es lo que devuelve el boletín en cuanto Mailchimp vuelve |
-| `knowledge:lint --module=newsletter` | Valida las guías de ayuda del módulo (el core las sincroniza con `knowledge:sync` al desplegar) |
+| `knowledge:lint --module=newsletter` | Valida las guías de ayuda del módulo (el core las sincroniza al habilitar o actualizar el módulo) |
 
 ## Guías de ayuda
 
@@ -91,9 +91,8 @@ El módulo define un único permiso, `newsletter.configure` («Configurar el bol
 3. En el panel: configurar el boletín (clave, lista, consentimiento y política de privacidad) y guardar con la conexión correcta.
 4. Dar el permiso «Configurar el boletín» a quien deba gestionarlo y avisar de que recibirá los avisos si Mailchimp falla.
 5. Añadir el bloque «Suscripción al boletín» al pie (*Sitio web → Pie de página*) y, si se quiere, a una ventana emergente.
-6. Cambiar el enlace del menú público al boletín para que apunte a `/newsletter`.
+6. Crear (o cambiar) un enlace del menú público a `/newsletter`.
 7. Hacer un alta de prueba con una dirección propia y confirmar el correo de Mailchimp.
-8. Sincronizar las guías (`php artisan knowledge:sync`) si el despliegue no lo hace.
 
 ## Ajustes
 

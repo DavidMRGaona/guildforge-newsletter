@@ -52,7 +52,7 @@ return [
             'ok' => 'Connection working (checked on :date)',
             'failed' => 'The last check failed (:date)',
             'ok_description' => 'The connection is checked again every day.',
-            'failed_hidden' => 'The newsletter is hidden from the site while the connection does not work. It is checked again every day and when the settings are saved.',
+            'failed_hidden' => 'The newsletter is hidden from the site while the connection does not work. It is checked again every 30 minutes and when the settings are saved.',
             'refused_streak' => 'Mailchimp has refused or failed :count sign-ups in a row',
             'refused_streak_description' => 'The connection works, so the newsletter is still shown. Review the required fields of the audience in Mailchimp.',
         ],
@@ -86,7 +86,7 @@ return [
             'subject' => 'The newsletter is hidden: the connection with Mailchimp failed',
             'greeting' => 'Hello, :name',
             'body' => 'The check of the connection with Mailchimp failed and the newsletter no longer appears on the site.',
-            'hint' => 'Review the key and the list in the newsletter settings and save them: if the connection works, the newsletter appears again. It is also checked again every day.',
+            'hint' => 'Review the key and the list in the newsletter settings and save them: if the connection works, the newsletter appears again. It is also checked again every 30 minutes while it is hidden.',
             'action' => 'Open the newsletter settings',
         ],
         'refused_sign_ups' => [
