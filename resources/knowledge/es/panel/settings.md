@@ -49,7 +49,7 @@ Los fallos que puede explicar son: Mailchimp no responde, no acepta la clave, fa
 
 Mientras la conexión funciona, el boletín aparece en estos sitios, y en ninguno cuando está oculto:
 
-- **El bloque «Suscripción al boletín»**, que añades al pie (*Sitio web → Pie de página*) o a una ventana emergente. Sus ajustes son el **Texto de presentación**, el **Texto del botón** y **Pedir el nombre**.
+- **El bloque «Suscripción al boletín»**, que añades al pie (*Sitio web → Pie de página*) o a una ventana emergente. Sus ajustes son el **Texto de presentación**, el **Texto del botón** y **Pedir el nombre**. En el pie sale compacto, para que no pese más que las demás columnas: el correo y el botón van en la misma fila (en pantallas pequeñas, uno debajo del otro) y el consentimiento va en letra pequeña con el enlace a la política en la misma frase. En una ventana emergente sale completo.
 - **La página `/newsletter`.** Para enlazarla, crea un enlace a `/newsletter` en el menú público.
 - **La sección «Boletín» del perfil** de cada persona y una casilla en el registro.
 
