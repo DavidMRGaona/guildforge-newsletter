@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { defineComponent, h, nextTick, type Component, type VNode } from 'vue';
+import { computed, defineComponent, h, provide, type Component, type VNode } from 'vue';
 import { mount } from '@vue/test-utils';
 import SubscribeBlock from '../../resources/js/components/SubscribeBlock.vue';
+import { SITE_BLOCK_PLACEMENT } from '@/composables/useSiteBlockPlacement';
+import type { SiteBlockPlacement } from '@/types/siteBlocks';
 import type { SubscribeFormProps } from '../../resources/js/types/subscribe';
 
 const props: SubscribeFormProps = {
@@ -15,16 +17,12 @@ const props: SubscribeFormProps = {
     name: null,
 };
 
-function inside(markup: 'footer-column' | 'popup-with-footer'): Component {
+function inPlacement(placement: SiteBlockPlacement): Component {
     return defineComponent({
         setup() {
-            return (): VNode =>
-                markup === 'footer-column'
-                    ? h('footer', [
-                          h('div', { 'data-footer-column': '' }, [h(SubscribeBlock, props)]),
-                      ])
-                    : // A popup whose own content has a <footer>: not the site footer
-                      h('div', { role: 'dialog' }, [h('footer', [h(SubscribeBlock, props)])]);
+            provide(SITE_BLOCK_PLACEMENT, computed(() => placement));
+
+            return (): VNode => h(SubscribeBlock, props);
         },
     });
 }
@@ -37,17 +35,32 @@ describe('SubscribeBlock', () => {
         expect(wrapper.find('form[action="/newsletter"]').exists()).toBe(true);
     });
 
-    it('is dark in a column of the site footer', async () => {
-        const wrapper = mount(inside('footer-column'), { attachTo: document.body });
-        // The tone is read once the block is in the page
-        await nextTick();
+    it('is dark in the footer', () => {
+        const wrapper = mount(inPlacement('footer'));
 
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-neutral-900');
     });
 
-    it('follows the page anywhere else, even inside some other <footer>', async () => {
-        const wrapper = mount(inside('popup-with-footer'), { attachTo: document.body });
-        await nextTick();
+    it('follows the page in a popup', () => {
+        const wrapper = mount(inPlacement('popup'));
+
+        expect(wrapper.get('input[type="email"]').classes()).toContain('bg-surface');
+    });
+
+    it('does not look at the markup around it', () => {
+        const wrapper = mount(
+            defineComponent({
+                setup() {
+                    provide(
+                        SITE_BLOCK_PLACEMENT,
+                        computed(() => 'popup' as const),
+                    );
+
+                    return (): VNode =>
+                        h('footer', [h('div', { 'data-footer-column': '' }, [h(SubscribeBlock, props)])]);
+                },
+            }),
+        );
 
         expect(wrapper.get('input[type="email"]').classes()).toContain('bg-surface');
     });
