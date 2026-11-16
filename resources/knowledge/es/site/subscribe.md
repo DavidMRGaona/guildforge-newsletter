@@ -19,7 +19,7 @@ Puedes hacerlo desde varios sitios, y es lo mismo en todos:
 
 - el formulario del **pie de la página**, de una ventana emergente o de la página de enlaces, si {{site_name}} lo ha puesto;
 - la página **Boletín**;
-- la sección **Boletín** de tu perfil;
+- la sección **Boletín** de **Ajustes de la cuenta**;
 - la casilla **Quiero recibir el boletín** al crear tu cuenta.
 
 Desde el formulario:
@@ -46,13 +46,13 @@ La confirmación evita que alguien apunte tu dirección sin que lo sepas.
 Tienes dos formas:
 
 - Abre el **enlace de baja** que lleva cada boletín que recibes.
-- Entra en tu perfil, abre la pestaña **Boletín** y pulsa **Darme de baja**.
+- Entra en **Ajustes de la cuenta**, abre la pestaña **Boletín** y pulsa **Darme de baja**.
 
-[[action:profile.show?tab=newsletter|Abrir la sección Boletín de mi perfil]]
+[[action:profile.show?tab=newsletter|Abrir la sección Boletín de Ajustes de la cuenta]]
 
 Puedes volver a apuntarte cuando quieras, desde el mismo sitio, con **Suscribirme**.
 
-## La sección «Boletín» de tu perfil
+## La sección «Boletín» de Ajustes de la cuenta
 
 Cuando la abres, la web pregunta a Mailchimp y te dice en qué estado estás:
 
@@ -65,7 +65,7 @@ Cuando la abres, la web pregunta a Mailchimp y te dice en qué estado estás:
 Siempre se usa el correo de tu cuenta, nunca otro.
 
 > [!IMPORTANT]
-> Para gestionar el boletín desde tu perfil, tu correo tiene que estar verificado. Así nadie que haya creado una cuenta con una dirección ajena puede ver ni cambiar la suscripción de otra persona. Si no está verificado, la sección te da un enlace para **Verificar mi correo**.
+> Para gestionar el boletín desde Ajustes de la cuenta, tu correo tiene que estar verificado. Así nadie que haya creado una cuenta con una dirección ajena puede ver ni cambiar la suscripción de otra persona. Si no está verificado, la sección te da un enlace para **Verificar mi correo**.
 
 ## Qué datos se guardan
 

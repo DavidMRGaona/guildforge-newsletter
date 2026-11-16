@@ -8,7 +8,7 @@ La web no guarda suscriptores: cada alta va a una lista (audiencia) de Mailchimp
 
 - el **bloque «Suscripción al boletín»**, para el pie de página y para las ventanas emergentes;
 - la **página `/newsletter`**;
-- la **sección «Boletín» del perfil**, para ver el estado, suscribirse y darse de baja (solo con el email verificado);
+- la **sección «Boletín» de Ajustes de la cuenta**, para ver el estado, suscribirse y darse de baja (solo con el email verificado);
 - la **casilla «Quiero recibir el boletín»** del registro;
 - los **ajustes** en *Sistema → Configuración → Boletín*;
 - la **vigilancia de la conexión**: si Mailchimp deja de funcionar, el boletín se oculta, se avisa a quien lo configura y vuelve solo cuando Mailchimp responde;
@@ -68,7 +68,7 @@ El módulo define un único permiso, `newsletter.configure` («Configurar el bol
 - En los logs solo aparece el hash del suscriptor, la operación, el código HTTP y el título del error de Mailchimp, nunca el email ni el detalle del error, que suele repetirlo.
 - Los trabajos en cola con un email van cifrados, y se borra su copia de `failed_jobs` si se rinden.
 - La clave de API se guarda cifrada y no se vuelve a mostrar.
-- La sección del perfil solo actúa sobre el email de la cuenta y solo con el email verificado.
+- La sección de Ajustes de la cuenta solo actúa sobre el email de la cuenta y solo con el email verificado.
 - Durante una impersonación no se llama a Mailchimp.
 
 ## Comandos y planificador
@@ -111,7 +111,7 @@ Guardar comprueba siempre la conexión y guarda la fecha y el resultado de la ú
 ## Salud del proveedor
 
 - `newsletter:check-connection` se lanza cada día en el planificador (06:30, en la zona de visualización) y también a mano. Pregunta a Mailchimp con la clave y la lista guardadas y guarda el resultado. Sale con error si la comprobación falla o no ha podido ejecutarse.
-- **Caída**: una comprobación que falla deja el módulo no disponible (se ocultan el bloque, la página, la sección «Boletín» del perfil y la casilla del registro) y avisa, una sola vez por caída, a quien tenga `newsletter.configure`: la notificación `newsletter.provider-down` va por la campana y por correo, según las preferencias de cada persona. Una comprobación correcta (la diaria, la de un fallo repetido, la de reintento o la de guardar los ajustes) lo restablece y permite avisar de la siguiente caída. Si la caída ya se vio al guardar los ajustes, no se vuelve a avisar.
+- **Caída**: una comprobación que falla deja el módulo no disponible (se ocultan el bloque, la página, la sección «Boletín» de Ajustes de la cuenta y la casilla del registro) y avisa, una sola vez por caída, a quien tenga `newsletter.configure`: la notificación `newsletter.provider-down` va por la campana y por correo, según las preferencias de cada persona. Una comprobación correcta (la diaria, la de un fallo repetido, la de reintento o la de guardar los ajustes) lo restablece y permite avisar de la siguiente caída. Si la caída ya se vio al guardar los ajustes, no se vuelve a avisar.
 - **Mailchimp sin respuesta** (tiempo agotado, 429, 5xx): no apaga el boletín a la primera. Cuenta como caída solo con dos respuestas así seguidas, separadas al menos 10 minutos. Cualquier otro fallo (clave rechazada, lista inexistente…) lo apaga a la primera.
 - **Reintento**: `newsletter:check-connection --recheck` cada 30 minutos en el planificador. Solo comprueba si la última comprobación falló o hay una respuesta sin confirmar, así que restablece el boletín en cuanto Mailchimp vuelve.
 - **Altas fallidas**: tres seguidas (`SubscribeFailureCounterInterface`) piden una comprobación en cola, como mucho una cada 15 minutos. El disparador solo lanza la comprobación: nunca apaga el boletín, porque cualquiera puede provocar fallos con direcciones malas.
@@ -147,7 +147,7 @@ El mismo formulario aparece en tres sitios, y en ninguno mientras el boletín no
 - **Bloque `newsletter.subscribe`** para el pie (*Sitio web → Pie de página*) y para las ventanas emergentes de anuncios. Sus ajustes son planos: texto de presentación, texto del botón y si se pide el nombre. Con el proveedor caído el bloque no se pinta.
 - **Página `/newsletter`** (`newsletter.show`), que responde 404 si el boletín no está disponible (`EnsureNewsletterIsAvailable`, en las dos rutas, antes del límite y de la validación). Las ventanas emergentes nunca salen en ella. El enlace del menú se pone a mano (*Menú público*, enlace a `/newsletter`).
 
-Pide email, nombre opcional y una casilla de consentimiento obligatoria con el texto y el enlace de los ajustes. Lleva un campo trampa (`website`) que la gente no ve: con cualquier valor en él (texto, una lista…) la petición no se valida, recibe la misma respuesta y no se envía nada. Con sesión, el email y el nombre de la cuenta ya vienen puestos. En el pie configurable toma los colores oscuros del pie y sale compacto: casilla oscura, consentimiento en letra pequeña con el enlace a la política dentro de la misma frase, correo con la etiqueta solo para lectores de pantalla (el texto «Correo electrónico» hace de marcador) y el botón al lado del campo desde `sm`, en tamaño `sm`; en una ventana, la página `/newsletter` y el perfil, los de la página y el formulario completo (lo decide la ubicación que el core le da con `useSiteBlockPlacement()`, desde el core 3.78; el formulario recibe `compact` del bloque y no lee la ubicación). Cada error va bajo su campo y lo nombra (`aria-describedby`), el foco va al primero, y el resultado se anuncia y recibe el foco.
+Pide email, nombre opcional y una casilla de consentimiento obligatoria con el texto y el enlace de los ajustes. Lleva un campo trampa (`website`) que la gente no ve: con cualquier valor en él (texto, una lista…) la petición no se valida, recibe la misma respuesta y no se envía nada. Con sesión, el email y el nombre de la cuenta ya vienen puestos. En el pie configurable toma los colores oscuros del pie y sale compacto: casilla oscura, consentimiento en letra pequeña con el enlace a la política dentro de la misma frase, correo con la etiqueta solo para lectores de pantalla (el texto «Correo electrónico» hace de marcador) y el botón al lado del campo desde `sm`, en tamaño `sm`; en una ventana, la página `/newsletter` y Ajustes de la cuenta, los de la página y el formulario completo (lo decide la ubicación que el core le da con `useSiteBlockPlacement()`, desde el core 3.78; el formulario recibe `compact` del bloque y no lee la ubicación). Cada error va bajo su campo y lo nombra (`aria-describedby`), el foco va al primero, y el resultado se anuncia y recibe el foco.
 
 `POST /newsletter` (`newsletter.store`) acepta JSON (el formulario lo envía así, sin recargar la página) y formularios normales (vuelve atrás con el mensaje). Tiene un límite por IP (5 por minuto y 20 por hora, que no cuenta mientras el boletín no está disponible) y `email.verified-if-required`: una cuenta que debe verificar su email lo hace antes. La verificación del core va en el grupo `web`, antes que las rutas, así que una cuenta sin verificar recibe su 403 incluso con el boletín no disponible. La respuesta es siempre «Revisa tu correo…», sin decir si el email ya estaba en la lista.
 
@@ -163,9 +163,9 @@ El alta se pide a Mailchimp en un trabajo en cola, `SubscribeToNewsletterJob`:
 
 `SubscribeFailureCounterInterface` cuenta las altas fallidas seguidas, en la caché compartida por los workers: suma uno por cada trabajo que se rinde y por cada email que Mailchimp rechaza (`Rejected`), y solo vuelve a cero cuando Mailchimp escribe en la lista (`ConfirmationRequested`). Las respuestas que no escriben nada (ya suscrito o pendiente, rebotado) lo dejan como está, para que las altas repetidas de quien ya está en la lista no tapen un proveedor que rechaza a todos los nuevos. Es atómico sin bloqueo: `add()` crea la clave con caducidad solo si falta o ha caducado e `increment()` suma sin tocar la caducidad (con el store `database`, un insert y un update con la fila bloqueada); la racha caduca un día después de su primer fallo. La comprobación de salud del proveedor lo lee (ver «Salud del proveedor»): desde el tercer fallo pide una comprobación y, con la racha en 5 y la conexión sana, avisa de que Mailchimp rechaza las altas.
 
-## Perfil y registro
+## Ajustes de la cuenta y registro
 
-**Sección «Boletín» del perfil** (pestaña en el hueco `profile-sections`). La página del perfil no consulta a Mailchimp: la sección pide el estado a `GET /perfil/boletin` al abrirse. El estado de cada cuenta se recuerda 5 minutos (clave con el hash del id de la cuenta y el hash del email, nunca el email) y los fallos del proveedor no se recuerdan. Según el estado:
+**Sección «Boletín» de Ajustes de la cuenta** (`/perfil`, pestaña en el hueco `profile-sections`). La página de Ajustes de la cuenta no consulta a Mailchimp: la sección pide el estado a `GET /perfil/boletin` al abrirse. El estado de cada cuenta se recuerda 5 minutos (clave con el hash del id de la cuenta y el hash del email, nunca el email) y los fallos del proveedor no se recuerdan. Según el estado:
 
 | Estado | La sección dice | Botón |
 |--------|-----------------|-------|
