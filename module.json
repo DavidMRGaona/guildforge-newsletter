@@ -1,7 +1,7 @@
 {
   "name": "newsletter",
   "displayName": "Boletín",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "repository": "DavidMRGaona/guildforge-newsletter",
   "namespace": "Modules\\Newsletter",
   "provider": "NewsletterServiceProvider",
