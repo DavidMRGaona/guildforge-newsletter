@@ -51,13 +51,13 @@ Mientras la conexión funciona, el boletín aparece en estos sitios, y en ningun
 
 - **El bloque «Suscripción al boletín»**, que añades al pie (*Sitio web → Pie de página*), a una ventana emergente o a la página de enlaces, si la web la tiene. Sus ajustes son el **Texto de presentación**, el **Texto del botón** y **Pedir el nombre**. En el pie sale compacto, para que no pese más que las demás columnas: el correo y el botón van en la misma fila (en pantallas pequeñas, uno debajo del otro) y el consentimiento va en letra pequeña con el enlace a la política en la misma frase. En una ventana emergente y en la página de enlaces sale completo.
 - **La página `/newsletter`.** Para enlazarla, crea un enlace a `/newsletter` en el menú público.
-- **La sección «Boletín» del perfil** de cada persona y una casilla en el registro.
+- **La sección «Boletín» de Ajustes de la cuenta** de cada persona y una casilla en el registro.
 
 ## Si Mailchimp falla
 
 Qué hace la web cuando algo va mal:
 
-- **Se oculta el boletín.** Cuando una comprobación falla, desaparecen el bloque, la página, la sección del perfil y la casilla del registro. Si Mailchimp solo tarda en responder, no se oculta a la primera: hacen falta dos respuestas fallidas seguidas, separadas al menos diez minutos. Una clave rechazada o una lista que ya no existe lo ocultan a la primera.
+- **Se oculta el boletín.** Cuando una comprobación falla, desaparecen el bloque, la página, la sección de Ajustes de la cuenta y la casilla del registro. Si Mailchimp solo tarda en responder, no se oculta a la primera: hacen falta dos respuestas fallidas seguidas, separadas al menos diez minutos. Una clave rechazada o una lista que ya no existe lo ocultan a la primera.
 - **Se avisa a quien configura el boletín**, una sola vez por caída, por la campana y por correo según las preferencias de cada persona (el aviso se llama «Aviso de que Mailchimp ha dejado de funcionar»).
 - **Vuelve solo.** La web comprueba la conexión cada día y, mientras el boletín está oculto, cada 30 minutos. En cuanto Mailchimp responde bien, el boletín reaparece sin que hagas nada. También puedes arreglar la clave o la lista y guardar los ajustes: si la conexión funciona, vuelve al momento. Al revés, si guardas mientras Mailchimp no responde, el boletín se oculta al momento: el guardado no espera confirmación.
 - **Tres altas fallidas seguidas** piden una comprobación extra, pero nunca ocultan el boletín por sí solas.
